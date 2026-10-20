@@ -4,9 +4,9 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>com.firefly</groupId>
+        <groupId>io.fireflysoftware</groupId>
         <artifactId>core-common-sca-mgmt</artifactId>
-        <version>26.10.2</version>
+        <version>26.10.3</version>
     </parent>
 
     <artifactId>core-common-sca-mgmt-web</artifactId>
@@ -15,17 +15,17 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Enable OpenAPI generation (profile inherited from firefly-parent) -->
         <openapi.gen.skip>false</openapi.gen.skip>
-        <openapi.gen.mainClass>com.firefly.core.sca.web.openapi.OpenApiGenApplication</openapi.gen.mainClass>
+        <openapi.gen.mainClass>io.fireflysoftware.core.sca.web.openapi.OpenApiGenApplication</openapi.gen.mainClass>
     </properties>
 
     <dependencies>
         <!-- Internal modules -->
         <dependency>
-            <groupId>com.firefly</groupId>
+            <groupId>io.fireflysoftware</groupId>
             <artifactId>core-common-sca-mgmt-core</artifactId>
         </dependency>
         <dependency>
-            <groupId>com.firefly</groupId>
+            <groupId>io.fireflysoftware</groupId>
             <artifactId>core-common-sca-mgmt-interfaces</artifactId>
         </dependency>
 
