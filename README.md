@@ -1,4 +1,17 @@
-# Common Platform SCA Management Service
+<a href="https://fireflysoftware.io/openplatform/">
+<picture>
+  <source media="(max-width: 640px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/firefly-oss/.github/main/profile/assets/banner-narrow-dark.svg">
+  <source media="(max-width: 640px)" srcset="https://raw.githubusercontent.com/firefly-oss/.github/main/profile/assets/banner-narrow-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/firefly-oss/.github/main/profile/assets/banner-dark.svg">
+  <img src="https://raw.githubusercontent.com/firefly-oss/.github/main/profile/assets/banner-light.svg" alt="Firefly OpenPlatform - Core Common - Strong Customer Authentication" width="100%">
+</picture>
+</a>
+
+# Firefly OpenPlatform - Core Common - Strong Customer Authentication
+
+Developed by the Firefly Software Foundation. [dev@fireflysoftware.io](mailto:dev@fireflysoftware.io)
+
+[Website](https://fireflysoftware.io/) · [OpenPlatform](https://fireflysoftware.io/openplatform/) · [Module catalogue](https://fireflysoftware.io/openplatform/modules/)
 
 ## Overview
 The Common Platform SCA Management Service is a microservice component of the Firefly platform that handles Strong Customer Authentication (SCA) operations. It provides a comprehensive API for managing SCA operations, challenges, attempts, and audit trails, enabling secure customer authentication flows in compliance with regulatory requirements.
