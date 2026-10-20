@@ -12,6 +12,7 @@
     </parent>
 
     <artifactId>core-common-sca-mgmt</artifactId>
+    <name>core-common-sca-mgmt</name>
     <packaging>pom</packaging>
     <modules>
         <module>core-common-sca-mgmt-core</module>

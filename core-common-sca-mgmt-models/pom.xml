@@ -10,6 +10,7 @@
     </parent>
 
     <artifactId>core-common-sca-mgmt-models</artifactId>
+    <name>core-common-sca-mgmt-models</name>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
