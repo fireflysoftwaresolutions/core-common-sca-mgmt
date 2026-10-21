@@ -56,7 +56,11 @@ public class SCAChallengeServiceImpl implements SCAChallengeService {
     @Override
     public Mono<SCAChallengeDTO> create(UUID operationId, SCAChallengeDTO dto) {
         SCAChallenge entity = mapper.toEntity(dto);
+        entity.markNew();
         entity.setScaOperationId(operationId);
+        if (entity.getCreatedAt() == null) {
+            entity.setCreatedAt(java.time.LocalDateTime.now());
+        }
         return repository.save(entity).map(mapper::toDTO);
     }
 

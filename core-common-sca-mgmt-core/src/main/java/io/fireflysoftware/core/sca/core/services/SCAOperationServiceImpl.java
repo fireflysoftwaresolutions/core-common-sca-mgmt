@@ -63,6 +63,7 @@ public class SCAOperationServiceImpl implements SCAOperationService {
         return Mono.just(dto)
                 .map(mapper::toEntity)
                 .flatMap(entity -> {
+                    entity.markNew();
                     entity.setCreatedAt(LocalDateTime.now());
                     entity.setLastUpdated(LocalDateTime.now());
                     return repository.save(entity);

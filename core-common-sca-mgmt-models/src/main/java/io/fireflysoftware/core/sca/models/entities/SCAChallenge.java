@@ -19,6 +19,8 @@ package io.fireflysoftware.core.sca.models.entities;
 
 import lombok.Data;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Transient;
+import org.springframework.data.domain.Persistable;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
@@ -30,7 +32,7 @@ import java.util.UUID;
  */
 @Data
 @Table("sca_challenge")
-public class SCAChallenge {
+public class SCAChallenge implements Persistable<UUID> {
 
     @Id
     @Column("id")
@@ -50,4 +52,20 @@ public class SCAChallenge {
 
     @Column("used")
     private Boolean used; // flag indicating if the code was used
+
+    /** True only for a row that has not been inserted. A preset id would otherwise be treated as an update. */
+    @Transient
+    private boolean insert;
+
+    @Override
+    public boolean isNew() {
+        return insert;
+    }
+
+    public void markNew() {
+        if (id == null) {
+            id = UUID.randomUUID();
+        }
+        insert = true;
+    }
 }
