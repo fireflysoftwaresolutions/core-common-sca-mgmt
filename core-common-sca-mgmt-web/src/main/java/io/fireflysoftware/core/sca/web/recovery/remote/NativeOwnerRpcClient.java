@@ -41,9 +41,14 @@ public final class NativeOwnerRpcClient {
     private final WebClient http;
 
     public NativeOwnerRpcClient(NativeOwnerProperties properties, String issuer, String audience) {
-        this(properties, issuer, audience, WebClient.builder().clientConnector(new ReactorClientHttpConnector(
-                HttpClient.create().followRedirect(false).responseTimeout(properties.getTimeout())
-                        .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, Math.toIntExact(properties.getTimeout().toMillis()))))));
+        this(properties, issuer, audience, httpBuilder(properties, issuer, audience));
+    }
+
+    private static WebClient.Builder httpBuilder(NativeOwnerProperties properties, String issuer, String audience) {
+        properties.validate(issuer, audience);
+        HttpClient transport = HttpClient.create().followRedirect(false).responseTimeout(properties.getTimeout())
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, Math.toIntExact(properties.getTimeout().toMillis()));
+        return WebClient.builder().clientConnector(new ReactorClientHttpConnector(transport));
     }
 
     NativeOwnerRpcClient(NativeOwnerProperties properties, String issuer, String audience, WebClient.Builder builder) {
