@@ -31,12 +31,14 @@ import reactor.core.publisher.Mono;
 public class RecoveryConfiguration {
     @Bean
     @ConditionalOnMissingBean(RecoveryAdmissionPort.class)
+    @ConditionalOnProperty(name = "firefly.sca.recovery.native-owner.enabled", havingValue = "false", matchIfMissing = true)
     RecoveryAdmissionPort unavailableRecoveryAdmission() {
         return (expectations, action) -> Mono.error(new RecoveryUnavailableException());
     }
 
     @Bean
     @ConditionalOnMissingBean(RecoveryFactorProvider.class)
+    @ConditionalOnProperty(name = "firefly.sca.recovery.native-owner.enabled", havingValue = "false", matchIfMissing = true)
     RecoveryFactorProvider unavailableRecoveryFactors() {
         return new RecoveryFactorProvider() {
             @Override public Mono<IssuedRecoveryChallenge> issue(TrustedRecoveryContext context, java.util.UUID id, java.util.UUID reservationId,
@@ -53,12 +55,14 @@ public class RecoveryConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(RecoveryExecutionVerifier.class)
+    @ConditionalOnProperty(name = "firefly.sca.recovery.native-owner.enabled", havingValue = "false", matchIfMissing = true)
     RecoveryExecutionVerifier unavailableRecoveryExecutor() {
         return (context, execution, outcome) -> Mono.error(new RecoveryUnavailableException());
     }
 
     @Bean
     @ConditionalOnMissingBean(RecoveryRejectionAuditPort.class)
+    @ConditionalOnProperty(name = "firefly.sca.recovery.database-audit.enabled", havingValue = "false", matchIfMissing = true)
     RecoveryRejectionAuditPort unavailableRecoveryRejectionAudit() {
         return (context, action) -> Mono.error(new RecoveryUnavailableException());
     }

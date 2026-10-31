@@ -59,6 +59,7 @@ import java.util.Set;
 public class RecoverySecurityConfiguration {
     @Bean
     @ConditionalOnMissingBean(RecoveryBoundaryAuditPort.class)
+    @ConditionalOnProperty(name = "firefly.sca.recovery.database-audit.enabled", havingValue = "false", matchIfMissing = true)
     public RecoveryBoundaryAuditPort unavailableRecoveryBoundaryAudit() {
         return event -> Mono.error(new IllegalStateException("Qualified recovery boundary audit unavailable"));
     }
