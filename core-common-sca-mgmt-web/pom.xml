@@ -33,6 +33,10 @@
         <!-- Common Libraries -->
         <dependency>
             <groupId>org.fireflyframework</groupId>
+            <artifactId>fireflyframework-security-resource-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.fireflyframework</groupId>
             <artifactId>fireflyframework-web</artifactId>
         </dependency>
 

@@ -1,0 +1,53 @@
+name: Guarded recovery source qualification
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: recovery-source-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  recovery-source-parent-23:
+    name: Source parent 23 and owned PostgreSQL fixture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: fireflysoftwaresolutions/firefly-parent
+          ref: 6442bd51733ade4d5f4583e1afe812dd2c520b40
+          path: .qualification/firefly-parent
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Check optional installer source and exact parent fixture
+        run: |
+          python3 ops/recovery-installer/check_source.py
+          python3 tooling/prepare_source_fixture.py
+      - name: Install only the owned empty hosted database
+        run: python3 tooling/recovery_postgres_fixture.py
+      - name: Genuine reactor and explicitly selected real-database tests
+        run: |
+          umask 077
+          task_maven_status=0
+          mvn -B -ntp -Precovery-postgres-it -Dmaven.repo.local="$RUNNER_TEMP/sca-recovery-source-m2" verify > .qualification/maven.log 2>&1 || task_maven_status=$?
+          python3 tooling/summarize_source_fixture.py "$task_maven_status"
+          exit "$task_maven_status"
+      - name: Preserve bounded qualification summary
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: recovery-source-summary
+          path: .qualification/source-summary.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Stop only this run's owned database
+        if: always()
+        run: python3 tooling/recovery_postgres_fixture.py stop
