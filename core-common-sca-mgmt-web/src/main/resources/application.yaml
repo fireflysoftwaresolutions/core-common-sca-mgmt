@@ -158,6 +158,8 @@ firefly:
       signature-algorithms: [RS256]
   sca:
     recovery:
+      database-audit:
+        enabled: ${SCA_RECOVERY_DATABASE_AUDIT_ENABLED:false}
       receiver:
         issuer: ${SCA_RECOVERY_TRUSTED_ISSUER}
         audience: ${SCA_RECOVERY_AUDIENCE}

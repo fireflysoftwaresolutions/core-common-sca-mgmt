@@ -29,6 +29,9 @@ import io.fireflysoftware.core.sca.interfaces.recovery.RecoveryFactorCategory;
 import io.fireflysoftware.core.sca.interfaces.recovery.RecoveryProofKind;
 import io.fireflysoftware.core.sca.interfaces.recovery.RecoveryVerificationResponse;
 import io.fireflysoftware.core.sca.interfaces.recovery.VerifyRecoveryChallengeRequest;
+import io.fireflysoftware.core.sca.interfaces.recovery.ReserveRecoveryVerificationRequest;
+import io.fireflysoftware.core.sca.interfaces.recovery.CompleteRecoveryVerificationRequest;
+import io.fireflysoftware.core.sca.interfaces.recovery.VerifyRecoveryAuthorizationRequest;
 import io.fireflysoftware.core.sca.models.entities.SCARecoveryChallenge;
 import io.fireflysoftware.core.sca.models.entities.SCARecoveryOperation;
 import io.fireflysoftware.core.sca.models.repositories.SCARecoveryAuditRepository;
@@ -120,6 +123,7 @@ class SCARecoveryServiceTest {
         when(challenges.existsByOperationIdAndVerificationReservationIdIsNotNull(operationId)).thenReturn(Mono.just(false));
         when(challenges.findAllByOperationId(operationId)).thenReturn(Flux.empty());
         when(audits.existsByOperationIdAndEventTypeAndReservationId(any(), anyString(), any())).thenReturn(Mono.just(true));
+        when(audits.existsByOperationIdAndEventTypeAndExecutionId(any(), anyString(), any())).thenReturn(Mono.just(true));
         when(audits.save(any())).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
         when(factors.verify(any(), any(), any(), anyString())).thenAnswer(ignored -> Mono.just(proof(false)));
         service = new SCARecoveryServiceImpl(operations, challenges, audits, transactions,
@@ -521,6 +525,81 @@ class SCARecoveryServiceTest {
         assertEquals("VerifiedRecoveryProof[REDACTED]", proof(true).toString());
         assertEquals("RecoveryAuthorizationReceipt[REDACTED]",
                 new RecoveryAuthorizationReceipt(operationId, UUID.randomUUID(), binding, now).toString());
+    }
+
+    @Test
+    void externalReservationCommitsOnceAndPendingRetryReusesSameReferenceWithoutProvider() {
+        var request = new ReserveRecoveryVerificationRequest(binding, challenge.getId());
+        var first = service.reserveRecoveryVerification(operationId, request).block();
+        assertNotNull(first);
+        assertEquals(challenge.getVerificationReservationId(), first.reservationId());
+        assertEquals(challenge.getProviderChallengeId(), first.providerChallengeId());
+        StepVerifier.create(service.reserveRecoveryVerification(operationId, request)).expectNext(first).verifyComplete();
+        assertEquals(1, operation.getAttemptCount());
+        assertEquals(1, challenge.getAttemptCount());
+        verify(factors, never()).verify(any(), any(), any(), anyString());
+        verify(audits, times(1)).save(argThat(event -> "PROOF_RESERVED".equals(event.getEventType())));
+    }
+
+    @Test
+    void externalCompletionUsesExactReservationOpaqueAttestationAndDoesNotChargeAgain() {
+        var reservation = service.reserveRecoveryVerification(operationId,
+                new ReserveRecoveryVerificationRequest(binding, challenge.getId())).block();
+        when(factors.verify(any(), any(), any(), anyString())).thenAnswer(ignored -> Mono.just(proof(true)));
+        var request = new CompleteRecoveryVerificationRequest(binding, challenge.getId(), reservation.reservationId(), "opaque-reference");
+        StepVerifier.create(service.completeRecoveryVerification(operationId, request))
+                .expectNext(new RecoveryVerificationResponse(operationId, "ACKNOWLEDGED")).verifyComplete();
+        StepVerifier.create(service.completeRecoveryVerification(operationId, request))
+                .expectNext(new RecoveryVerificationResponse(operationId, "ACKNOWLEDGED")).verifyComplete();
+        assertEquals(1, operation.getAttemptCount());
+        assertEquals(1, challenge.getAttemptCount());
+        verify(factors, times(1)).verify(any(), any(), eq(RecoveryProofKind.PROVIDER_ATTESTATION), eq("opaque-reference"));
+    }
+
+    @Test
+    void externalCompletionWithDifferentReservationCannotCallProviderOrReopenProof() {
+        service.reserveRecoveryVerification(operationId, new ReserveRecoveryVerificationRequest(binding, challenge.getId())).block();
+        StepVerifier.create(service.completeRecoveryVerification(operationId,
+                new CompleteRecoveryVerificationRequest(binding, challenge.getId(), UUID.randomUUID(), "opaque-reference")))
+                .expectNext(new RecoveryVerificationResponse(operationId, "ACKNOWLEDGED")).verifyComplete();
+        assertFalse(challenge.getVerified());
+        assertEquals(1, operation.getAttemptCount());
+        verify(factors, never()).verify(any(), any(), any(), anyString());
+    }
+
+    @Test
+    void onlineAuthorizationRequiresExactPendingConsumedReceiptAndCommittedAudit() {
+        operation.setState("CONSUMED");
+        operation.setExecutionId(UUID.randomUUID());
+        operation.setReceiptExpiresAt(now.plusSeconds(30));
+        operation.setExecutionOutcome("PENDING");
+        var request = new VerifyRecoveryAuthorizationRequest(binding, operation.getExecutionId(), operation.getReceiptExpiresAt());
+        StepVerifier.create(service.verifyRecoveryAuthorization(operationId, request))
+                .expectNext(new RecoveryAuthorizationReceipt(operationId, operation.getExecutionId(), binding, operation.getReceiptExpiresAt()))
+                .verifyComplete();
+        operation.setExecutionOutcome("UNKNOWN");
+        StepVerifier.create(service.verifyRecoveryAuthorization(operationId, request)).expectError(RecoveryDeniedException.class).verify();
+        operation.setExecutionOutcome("PENDING");
+        when(audits.existsByOperationIdAndEventTypeAndExecutionId(any(), anyString(), any())).thenReturn(Mono.just(false));
+        StepVerifier.create(service.verifyRecoveryAuthorization(operationId, request)).expectError(RecoveryDeniedException.class).verify();
+        verifyNoInteractions(executor);
+    }
+
+    @Test
+    void onlineAuthorizationRejectsExpiryOrExecutionSubstitutionAndExactExpiryBoundary() {
+        operation.setState("CONSUMED");
+        operation.setExecutionId(UUID.randomUUID());
+        operation.setReceiptExpiresAt(now.plusSeconds(30));
+        operation.setExecutionOutcome("PENDING");
+        for (var request : List.of(
+                new VerifyRecoveryAuthorizationRequest(binding, UUID.randomUUID(), operation.getReceiptExpiresAt()),
+                new VerifyRecoveryAuthorizationRequest(binding, operation.getExecutionId(), now.plusSeconds(60)))) {
+            StepVerifier.create(service.verifyRecoveryAuthorization(operationId, request)).expectError(RecoveryDeniedException.class).verify();
+        }
+        operation.setReceiptExpiresAt(now);
+        StepVerifier.create(service.verifyRecoveryAuthorization(operationId,
+                new VerifyRecoveryAuthorizationRequest(binding, operation.getExecutionId(), now)))
+                .expectError(RecoveryDeniedException.class).verify();
     }
 
     private void assertConsumeDenied() {

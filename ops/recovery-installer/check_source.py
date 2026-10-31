@@ -23,7 +23,7 @@ assert "verification_reservation_id UUID UNIQUE" in installer
 assert "reservation_id UUID" in installer
 assert "event_type = 'CHALLENGE_RESERVED'" in installer
 assert "event_type = 'PROOF_RESERVED'" in installer
-for entity in ("Operation", "Challenge", "Audit"):
+for entity in ("Operation", "Challenge", "Audit", "BoundaryAudit"):
     source = (models / "src/main/java/io/fireflysoftware/core/sca/models/entities"
               / f"SCARecovery{entity}.java").read_text()
     table = re.search(r'@Table\("([^\"]+)"\)', source).group(1)

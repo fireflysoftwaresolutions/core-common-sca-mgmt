@@ -25,6 +25,7 @@ import java.util.UUID;
 /** Deliberately exposes insert-only save; the database role also forbids mutation/deletion. */
 public interface SCARecoveryAuditRepository extends Repository<SCARecoveryAudit, UUID> {
     Mono<Boolean> existsByOperationIdAndEventTypeAndReservationId(UUID operationId, String eventType, UUID reservationId);
+    Mono<Boolean> existsByOperationIdAndEventTypeAndExecutionId(UUID operationId, String eventType, UUID executionId);
 
     <S extends SCARecoveryAudit> Mono<S> save(S audit);
 }

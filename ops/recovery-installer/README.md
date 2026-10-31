@@ -11,7 +11,7 @@ Use an approved PostgreSQL database with the original SCA schema already install
 - `recovery_owner` owns the new tables, indexes, functions, and triggers. It must be allowed to create objects in `public`; the operator must be allowed to `SET ROLE` to it. Prefer a separately administered role without application login.
 - `recovery_runtime` is the actual application's login role. It must not own or inherit the owner role, have administrative privileges, or have `CREATE` on `public`. Inherited/default grants must not supply forbidden recovery privileges. Resolve a failed precondition through a separately reviewed role change; this installer never creates roles, changes membership, or repairs shared-schema privileges.
 
-Review all runtime memberships, including roles it can assume. The installer grants only `SELECT, INSERT, UPDATE` on recovery operation/challenge tables and `SELECT, INSERT` on recovery audit. It rejects inherited `DELETE, TRUNCATE, TRIGGER, REFERENCES`, and rejects audit `UPDATE`. Runtime cannot alter/disable owner-controlled triggers. Audit triggers additionally reject row mutation and truncation. An administrative owner can change the schema; operational access control and audit remain required.
+Review all runtime memberships, including roles it can assume. The installer grants only `SELECT, INSERT, UPDATE` on recovery operation/challenge tables and `SELECT, INSERT` on operation and boundary audit. It rejects inherited `DELETE, TRUNCATE, TRIGGER, REFERENCES`, and rejects audit `UPDATE`. Runtime cannot alter/disable owner-controlled triggers. Audit triggers additionally reject row mutation and truncation. An administrative owner can change the schema; operational access control and audit remain required.
 
 The tables are separate from legacy SCA CRUD and have no legacy-operation foreign keys or cascade paths. No legacy record is converted into recovery proof. Recovery records must only be exposed through the guarded recovery service, never through general SCA CRUD.
 
@@ -37,7 +37,7 @@ psql service=reviewed_recovery_inspection -X --set=ON_ERROR_STOP=1 \
   --file=ops/recovery-installer/verify.sql
 ```
 
-Confirm exactly three tables owned by the reviewed owner, the minimal privilege matrix above, enabled operation/challenge/audit/consumption/reservation-audit triggers, and the expected uniqueness indexes. `verify.sql` reports catalog state; it does not change or repair it. Runtime deployments must retain a trusted `public` search path and the restricted role; do not run the application with the installer credentials.
+Confirm exactly four tables owned by the reviewed owner, the minimal privilege matrix above, enabled operation/challenge/audit/boundary-audit/consumption/reservation-audit triggers, and the expected uniqueness indexes. `verify.sql` reports catalog state; it does not change or repair it. Runtime deployments must retain a trusted `public` search path and the restricted role; do not run the application with the installer credentials.
 
 ## Database guarantees and limits
 
@@ -51,14 +51,16 @@ Consumption requires a successful optimistic version update, database wall time 
 
 The database cannot query Keycloak's current lock generation, authenticate a human, verify an external provider, or perform unlock. The guarded service must revalidate current actor/policy, exact target, and authoritative native generation before consumption/execution. Repository-level proof is not native provider or end-to-end acceptance.
 
+The fourth table, `sca_recovery_boundary_audit`, records verified-actor/action/outcome or anonymous refusal without an operation/target foreign key. Both audit tables have runtime `SELECT, INSERT` only. Enable the actual mapped sink with `firefly.sca.recovery.database-audit.enabled=true` only after reviewed installation. For an older candidate already installed in retained storage, approve a separate additive upgrade; do not rerun by dropping existing tables.
+
 ## Qualification source
 
-`SCARecoveryRepositoryIT` uses the actual Spring Data mapped repositories and nonpooled connections against an explicitly installed, disposable PostgreSQL fixture. It is selected through the explicit `recovery-postgres-it` Maven profile; its name alone does not execute it. The fixture must use the restricted runtime role and must never be a retained/customer database. Tests append uniquely identified records and do not erase them; fixture disposal belongs to the CI database lifecycle.
+`SCARecoveryRepositoryIT` and the Core `SCARecoveryNativeContractIT` use the actual Spring Data mapped repositories and nonpooled connections against an explicitly installed, disposable PostgreSQL fixture. It is selected through the explicit `recovery-postgres-it` Maven profile; its name alone does not execute it. The fixture must use the restricted runtime role and must never be a retained/customer database. Tests append uniquely identified records and do not erase them; fixture disposal belongs to the CI database lifecycle.
 
 After provisioning the approved fixture and setting the variables below, the qualified CI environment runs:
 
 ```sh
-mvn -B -Precovery-postgres-it -pl core-common-sca-mgmt-models -am verify
+mvn -B -Precovery-postgres-it verify
 ```
 
 The explicitly selected suite fails if any required variable is missing:

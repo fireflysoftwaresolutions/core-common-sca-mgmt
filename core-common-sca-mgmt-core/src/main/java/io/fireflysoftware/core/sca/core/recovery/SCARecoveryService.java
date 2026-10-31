@@ -25,6 +25,10 @@ import io.fireflysoftware.core.sca.interfaces.recovery.RecoveryChallengeResponse
 import io.fireflysoftware.core.sca.interfaces.recovery.RecoveryOperationResponse;
 import io.fireflysoftware.core.sca.interfaces.recovery.RecoveryVerificationResponse;
 import io.fireflysoftware.core.sca.interfaces.recovery.VerifyRecoveryChallengeRequest;
+import io.fireflysoftware.core.sca.interfaces.recovery.ReserveRecoveryVerificationRequest;
+import io.fireflysoftware.core.sca.interfaces.recovery.RecoveryVerificationReservation;
+import io.fireflysoftware.core.sca.interfaces.recovery.CompleteRecoveryVerificationRequest;
+import io.fireflysoftware.core.sca.interfaces.recovery.VerifyRecoveryAuthorizationRequest;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
@@ -33,6 +37,9 @@ public interface SCARecoveryService {
     Mono<RecoveryOperationResponse> createRecoveryOperation(CreateRecoveryOperationRequest request);
     Mono<RecoveryChallengeResponse> issueRecoveryChallenge(UUID operationId, IssueRecoveryChallengeRequest request);
     Mono<RecoveryVerificationResponse> verifyRecoveryChallenge(UUID operationId, VerifyRecoveryChallengeRequest request);
+    Mono<RecoveryVerificationReservation> reserveRecoveryVerification(UUID operationId, ReserveRecoveryVerificationRequest request);
+    Mono<RecoveryVerificationResponse> completeRecoveryVerification(UUID operationId, CompleteRecoveryVerificationRequest request);
+    Mono<RecoveryAuthorizationReceipt> verifyRecoveryAuthorization(UUID operationId, VerifyRecoveryAuthorizationRequest request);
     Mono<RecoveryAuthorizationReceipt> consumeRecoveryAuthorization(UUID operationId, ConsumeRecoveryAuthorizationRequest request);
     Mono<Void> recordRecoveryExecution(UUID operationId, RecordRecoveryExecutionRequest request);
 }

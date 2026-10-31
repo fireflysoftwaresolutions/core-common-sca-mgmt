@@ -28,5 +28,8 @@ for line in [*errors[-20:], *causes[-10:]]:
     print(line[:700])
 if summary['maven_exit'] == 0:
     database = [report for report in summary['reports'] if report['name'].endswith('.SCARecoveryRepositoryIT')]
-    if len(database) != 1 or int(database[0]['tests']) == 0 or int(database[0]['skipped']) != 0:
+    native_contract = [report for report in summary['reports'] if report['name'].endswith('.SCARecoveryNativeContractIT')]
+    if len(native_contract) != 1 or int(native_contract[0]['tests']) < 6 or int(native_contract[0]['skipped']) != 0:
+        raise SystemExit('Required owning transaction/native contract suite did not execute without skips')
+    if len(database) != 1 or int(database[0]['tests']) < 13 or int(database[0]['skipped']) != 0:
         raise SystemExit('Required real PostgreSQL suite did not execute without skips')

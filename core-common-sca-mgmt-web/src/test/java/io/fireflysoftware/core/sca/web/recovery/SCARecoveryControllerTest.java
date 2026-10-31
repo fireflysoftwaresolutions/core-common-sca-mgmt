@@ -175,4 +175,36 @@ class SCARecoveryControllerTest {
                 .jsonPath("$.accepted").doesNotExist().jsonPath("$.attemptCount").doesNotExist()
                 .jsonPath("$.remainingAttempts").doesNotExist().jsonPath("$.response").doesNotExist();
     }
+
+    @Test
+    void nativeReservationCompletionAndOnlineAuthorizationUseTypedAdmittedContracts() throws Exception {
+        SCARecoveryService service = mock(SCARecoveryService.class);
+        UUID operation = UUID.randomUUID(), challenge = UUID.randomUUID(), reservation = UUID.randomUUID(), execution = UUID.randomUUID();
+        var expiry = RecoveryWebAuthorizationTest.NOW.plusSeconds(60);
+        var binding = RecoveryWebAuthorizationTest.binding();
+        when(service.reserveRecoveryVerification(eq(operation), any())).thenReturn(Mono.just(new RecoveryVerificationReservation(
+                operation, challenge, reservation, "opaque-provider-ceremony", RecoveryFactorCategory.KNOWLEDGE, expiry)));
+        when(service.completeRecoveryVerification(eq(operation), any())).thenReturn(Mono.just(new RecoveryVerificationResponse(operation, "ACKNOWLEDGED")));
+        when(service.verifyRecoveryAuthorization(eq(operation), any())).thenReturn(Mono.just(new RecoveryAuthorizationReceipt(operation, execution, binding, expiry)));
+        var authorization = RecoveryWebAuthorizationTest.guard(Mono.just(RecoveryWebAuthorizationTest.principal(Map.of())),
+                (p, a, r, c) -> Mono.just(Decision.permit()));
+        var client = client(service, authorization, true);
+        String base = "/api/v1/sca/recovery-operations/" + operation;
+        client.post().uri(base + "/verifications/reservations").contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new ReserveRecoveryVerificationRequest(binding, challenge)).exchange().expectStatus().isCreated()
+                .expectBody().jsonPath("$.reservationId").isEqualTo(reservation.toString()).jsonPath("$.providerChallengeId").isEqualTo("opaque-provider-ceremony");
+        client.post().uri(base + "/verifications/complete").contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new CompleteRecoveryVerificationRequest(binding, challenge, reservation, "private-opaque-attestation"))
+                .exchange().expectStatus().isAccepted().expectBody().jsonPath("$.status").isEqualTo("ACKNOWLEDGED")
+                .jsonPath("$.attestation").doesNotExist().jsonPath("$.accepted").doesNotExist();
+        client.post().uri(base + "/authorizations/verify").contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new VerifyRecoveryAuthorizationRequest(binding, execution, expiry)).exchange().expectStatus().isOk()
+                .expectBody().jsonPath("$.executionId").isEqualTo(execution.toString());
+        for (var method : SCARecoveryController.class.getDeclaredMethods()) {
+            if (method.isAnnotationPresent(org.springframework.web.bind.annotation.PostMapping.class)) {
+                org.junit.jupiter.api.Assertions.assertTrue(method.isAnnotationPresent(
+                        org.fireflyframework.web.idempotency.annotation.DisableIdempotency.class));
+            }
+        }
+    }
 }

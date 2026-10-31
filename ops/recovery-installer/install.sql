@@ -113,6 +113,23 @@ CREATE INDEX recovery_audit_operation ON public.sca_recovery_audit(operation_id)
 CREATE UNIQUE INDEX recovery_audit_reservation_event_once
     ON public.sca_recovery_audit(event_type, reservation_id) WHERE reservation_id IS NOT NULL;
 
+CREATE TABLE public.sca_recovery_boundary_audit (
+    id UUID PRIMARY KEY,
+    issuer TEXT,
+    tenant TEXT,
+    actor_subject TEXT,
+    client_id TEXT,
+    population TEXT,
+    action TEXT,
+    outcome TEXT NOT NULL CHECK (outcome IN ('ADMITTED', 'REFUSED', 'REJECTED')),
+    occurred_at TIMESTAMPTZ NOT NULL,
+    CONSTRAINT recovery_boundary_actor CHECK (
+        (issuer IS NULL AND tenant IS NULL AND actor_subject IS NULL AND client_id IS NULL AND population IS NULL)
+        OR (issuer IS NOT NULL AND issuer <> '' AND tenant IS NOT NULL AND tenant <> ''
+            AND actor_subject IS NOT NULL AND actor_subject <> '' AND client_id IS NOT NULL AND client_id <> ''
+            AND population IS NOT NULL AND population <> ''))
+);
+
 CREATE FUNCTION public.recovery_operation_guard() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
     database_now TIMESTAMPTZ := clock_timestamp();
@@ -239,6 +256,10 @@ CREATE TRIGGER recovery_audit_append_only BEFORE UPDATE OR DELETE ON public.sca_
     FOR EACH ROW EXECUTE FUNCTION public.recovery_audit_append_only();
 CREATE TRIGGER recovery_audit_no_truncate BEFORE TRUNCATE ON public.sca_recovery_audit
     FOR EACH STATEMENT EXECUTE FUNCTION public.recovery_audit_append_only();
+CREATE TRIGGER recovery_boundary_audit_append_only BEFORE UPDATE OR DELETE ON public.sca_recovery_boundary_audit
+    FOR EACH ROW EXECUTE FUNCTION public.recovery_audit_append_only();
+CREATE TRIGGER recovery_boundary_audit_no_truncate BEFORE TRUNCATE ON public.sca_recovery_boundary_audit
+    FOR EACH STATEMENT EXECUTE FUNCTION public.recovery_audit_append_only();
 
 CREATE FUNCTION public.recovery_consumption_audit_required() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -286,8 +307,10 @@ CREATE CONSTRAINT TRIGGER recovery_challenge_reservation_audit_required
 
 REVOKE ALL ON public.sca_recovery_operation, public.sca_recovery_challenge, public.sca_recovery_audit FROM PUBLIC;
 REVOKE ALL ON public.sca_recovery_operation, public.sca_recovery_challenge, public.sca_recovery_audit FROM :"recovery_runtime";
+REVOKE ALL ON public.sca_recovery_boundary_audit FROM PUBLIC, :"recovery_runtime";
 GRANT SELECT, INSERT, UPDATE ON public.sca_recovery_operation, public.sca_recovery_challenge TO :"recovery_runtime";
 GRANT SELECT, INSERT ON public.sca_recovery_audit TO :"recovery_runtime";
+GRANT SELECT, INSERT ON public.sca_recovery_boundary_audit TO :"recovery_runtime";
 REVOKE ALL ON FUNCTION public.recovery_operation_guard(), public.recovery_challenge_guard(),
     public.recovery_audit_append_only(), public.recovery_consumption_audit_required(),
     public.recovery_challenge_reservation_audit_required() FROM PUBLIC;
@@ -297,6 +320,7 @@ DECLARE
     runtime_role name := current_setting('recovery.runtime');
 BEGIN
     IF has_table_privilege(runtime_role, 'public.sca_recovery_audit', 'UPDATE')
+       OR has_table_privilege(runtime_role, 'public.sca_recovery_boundary_audit', 'UPDATE,DELETE,TRUNCATE,TRIGGER,REFERENCES')
        OR has_table_privilege(runtime_role, 'public.sca_recovery_audit', 'DELETE,TRUNCATE,TRIGGER,REFERENCES')
        OR has_table_privilege(runtime_role, 'public.sca_recovery_operation', 'DELETE,TRUNCATE,TRIGGER,REFERENCES')
        OR has_table_privilege(runtime_role, 'public.sca_recovery_challenge', 'DELETE,TRUNCATE,TRIGGER,REFERENCES') THEN

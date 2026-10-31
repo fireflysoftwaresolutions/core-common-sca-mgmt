@@ -42,6 +42,10 @@ import io.fireflysoftware.core.sca.interfaces.recovery.RecoveryOperationResponse
 import io.fireflysoftware.core.sca.interfaces.recovery.RecoveryProofKind;
 import io.fireflysoftware.core.sca.interfaces.recovery.RecoveryVerificationResponse;
 import io.fireflysoftware.core.sca.interfaces.recovery.VerifyRecoveryChallengeRequest;
+import io.fireflysoftware.core.sca.interfaces.recovery.ReserveRecoveryVerificationRequest;
+import io.fireflysoftware.core.sca.interfaces.recovery.RecoveryVerificationReservation;
+import io.fireflysoftware.core.sca.interfaces.recovery.CompleteRecoveryVerificationRequest;
+import io.fireflysoftware.core.sca.interfaces.recovery.VerifyRecoveryAuthorizationRequest;
 import io.fireflysoftware.core.sca.models.entities.SCARecoveryAudit;
 import io.fireflysoftware.core.sca.models.entities.SCARecoveryChallenge;
 import io.fireflysoftware.core.sca.models.entities.SCARecoveryOperation;
@@ -195,6 +199,104 @@ public class SCARecoveryServiceImpl implements SCARecoveryService {
         });
     }
 
+    @Override
+    public Mono<RecoveryVerificationReservation> reserveRecoveryVerification(UUID operationId, ReserveRecoveryVerificationRequest request) {
+        return Mono.defer(() -> {
+            require(operationId != null && request != null && request.challengeId() != null);
+            return admitted(request.binding(), RecoveryAction.RESERVE_VERIFICATION, context ->
+                    transaction(() -> operations.databaseNow().flatMap(now -> load(operationId, context)
+                            .flatMap(operation -> challenges.findById(request.challengeId())
+                                    .switchIfEmpty(Mono.error(new RecoveryDeniedException())).flatMap(challenge -> {
+                                checkContext(context, request.binding(), RecoveryAction.RESERVE_VERIFICATION, now);
+                                require("OPEN".equals(operation.getState()) && now.isBefore(operation.getExpiresAt())
+                                        && operationId.equals(challenge.getOperationId()) && !Boolean.TRUE.equals(challenge.getVerified())
+                                        && now.isBefore(challenge.getExpiresAt()));
+                                if (challenge.getVerificationReservationId() != null) {
+                                    return audits.existsByOperationIdAndEventTypeAndReservationId(operationId, "PROOF_RESERVED",
+                                                    challenge.getVerificationReservationId())
+                                            .filter(Boolean::booleanValue).switchIfEmpty(Mono.error(new RecoveryDeniedException()))
+                                            .thenReturn(reservation(challenge));
+                                }
+                                checkOpen(operation, now);
+                                checkChallenge(challenge, operationId, now);
+                                UUID reservationId = UUID.randomUUID();
+                                operation.setAttemptCount(operation.getAttemptCount() + 1);
+                                challenge.setAttemptCount(challenge.getAttemptCount() + 1);
+                                challenge.setVerificationReservationId(reservationId);
+                                challenge.setVerificationReservedAt(now);
+                                return operations.save(operation).then(challenges.save(challenge))
+                                        .flatMap(saved -> audit(operation, "PROOF_RESERVED", now, reservationId)
+                                                .thenReturn(reservation(saved)));
+                            })))).flux().singleOrEmpty());
+        });
+    }
+
+    @Override
+    public Mono<RecoveryVerificationResponse> completeRecoveryVerification(UUID operationId, CompleteRecoveryVerificationRequest request) {
+        return Mono.defer(() -> {
+            require(operationId != null && request != null && request.challengeId() != null && request.reservationId() != null
+                    && request.attestation() != null && !request.attestation().isBlank() && request.attestation().length() <= 16384);
+            return admitted(request.binding(), RecoveryAction.COMPLETE_VERIFICATION, context ->
+                    transaction(() -> operations.databaseNow().flatMap(now -> load(operationId, context)
+                            .flatMap(operation -> challenges.findById(request.challengeId())
+                                    .switchIfEmpty(Mono.error(new RecoveryDeniedException())).flatMap(challenge -> {
+                                checkContext(context, request.binding(), RecoveryAction.COMPLETE_VERIFICATION, now);
+                                require(operationId.equals(challenge.getOperationId()));
+                                if (challenge.getVerificationReservationId() == null) {
+                                    return audits.existsByOperationIdAndEventTypeAndReservationId(operationId, "PROOF_ACCEPTED", request.reservationId())
+                                            .zipWith(audits.existsByOperationIdAndEventTypeAndReservationId(operationId, "PROOF_REJECTED", request.reservationId()))
+                                            .filter(events -> events.getT1() || events.getT2())
+                                            .switchIfEmpty(Mono.error(new RecoveryDeniedException()))
+                                            .then(Mono.<RecoveryChallengeReference>empty());
+                                }
+                                require(request.reservationId().equals(challenge.getVerificationReservationId())
+                                        && "OPEN".equals(operation.getState()) && now.isBefore(operation.getExpiresAt())
+                                        && !Boolean.TRUE.equals(challenge.getVerified()) && now.isBefore(challenge.getExpiresAt()));
+                                return audits.existsByOperationIdAndEventTypeAndReservationId(operationId, "PROOF_RESERVED", request.reservationId())
+                                        .filter(Boolean::booleanValue).switchIfEmpty(Mono.error(new RecoveryDeniedException()))
+                                        .thenReturn(reference(challenge, context.binding()));
+                            })))).flatMap(reference -> external(() -> factors.verify(context, reference,
+                                            RecoveryProofKind.PROVIDER_ATTESTATION, request.attestation()))
+                                    .flatMap(proof -> admit(request.binding(), RecoveryAction.COMPLETE_VERIFICATION)
+                                            .flatMap(fresh -> completeProof(operationId,
+                                                    new VerifyRecoveryChallengeRequest(request.binding(), request.challengeId(),
+                                                            RecoveryProofKind.PROVIDER_ATTESTATION, request.attestation()),
+                                                    fresh, request.reservationId(), proof, RecoveryAction.COMPLETE_VERIFICATION)
+                                                    .onErrorResume(DuplicateKeyException.class, ignored -> completeProof(operationId,
+                                                            new VerifyRecoveryChallengeRequest(request.binding(), request.challengeId(),
+                                                                    RecoveryProofKind.PROVIDER_ATTESTATION, request.attestation()),
+                                                            fresh, request.reservationId(), null, RecoveryAction.COMPLETE_VERIFICATION)))))
+                            .switchIfEmpty(Mono.just(acknowledged(operationId)))
+                            .onErrorResume(RecoveryDeniedException.class, ignored -> rejected(context, RecoveryAction.COMPLETE_VERIFICATION)
+                                    .thenReturn(acknowledged(operationId))));
+        });
+    }
+
+    @Override
+    public Mono<RecoveryAuthorizationReceipt> verifyRecoveryAuthorization(UUID operationId, VerifyRecoveryAuthorizationRequest request) {
+        return Mono.defer(() -> {
+            require(operationId != null && request != null && request.executionId() != null && request.expiresAt() != null);
+            return admitted(request.binding(), RecoveryAction.VERIFY_AUTHORIZATION, context ->
+                    transaction(() -> operations.databaseNow().flatMap(now -> load(operationId, context).flatMap(operation -> {
+                        checkContext(context, request.binding(), RecoveryAction.VERIFY_AUTHORIZATION, now);
+                        require("CONSUMED".equals(operation.getState()) && "PENDING".equals(operation.getExecutionOutcome())
+                                && request.executionId().equals(operation.getExecutionId())
+                                && request.expiresAt().equals(operation.getReceiptExpiresAt())
+                                && now.isBefore(operation.getReceiptExpiresAt()));
+                        return audits.existsByOperationIdAndEventTypeAndExecutionId(operationId, "CONSUMED", request.executionId())
+                                .filter(Boolean::booleanValue).switchIfEmpty(Mono.error(new RecoveryDeniedException()))
+                                .then(operations.save(operation))
+                                .flatMap(saved -> audit(saved, "AUTHORIZATION_VERIFIED", now).thenReturn(receipt(saved)));
+                    }))).flux().singleOrEmpty());
+        });
+    }
+
+    private RecoveryVerificationReservation reservation(SCARecoveryChallenge challenge) {
+        return new RecoveryVerificationReservation(challenge.getOperationId(), challenge.getId(),
+                challenge.getVerificationReservationId(), challenge.getProviderChallengeId(),
+                RecoveryFactorCategory.valueOf(challenge.getCategory()), challenge.getExpiresAt());
+    }
+
     private Mono<RecoveryChallengeReference> reserveVerification(UUID operationId, VerifyRecoveryChallengeRequest request,
             TrustedRecoveryContext context) {
         return transaction(() -> operations.databaseNow().flatMap(now -> load(operationId, context)
@@ -236,10 +338,15 @@ public class SCARecoveryServiceImpl implements SCARecoveryService {
 
     private Mono<RecoveryVerificationResponse> completeProof(UUID operationId, VerifyRecoveryChallengeRequest request,
             TrustedRecoveryContext context, UUID reservationId, VerifiedRecoveryProof proof) {
+        return completeProof(operationId, request, context, reservationId, proof, RecoveryAction.VERIFY_CHALLENGE);
+    }
+
+    private Mono<RecoveryVerificationResponse> completeProof(UUID operationId, VerifyRecoveryChallengeRequest request,
+            TrustedRecoveryContext context, UUID reservationId, VerifiedRecoveryProof proof, RecoveryAction action) {
         return transaction(() -> operations.databaseNow().flatMap(now -> load(operationId, context)
                 .flatMap(operation -> challenges.findById(request.challengeId())
                         .switchIfEmpty(Mono.error(new RecoveryDeniedException())).flatMap(challenge -> {
-                    checkContext(context, request.binding(), RecoveryAction.VERIFY_CHALLENGE, now);
+                    checkContext(context, request.binding(), action, now);
                     require("OPEN".equals(operation.getState()) && now.isBefore(operation.getExpiresAt())
                             && operation.getAttemptCount() <= operation.getMaxAttempts()
                             && operationId.equals(challenge.getOperationId()) && !Boolean.TRUE.equals(challenge.getVerified())

@@ -132,6 +132,45 @@ class RecoverySecurityConfigurationTest {
         assertThat(probe.calls).hasValue(0);
     }
 
+    @Test
+    void recoveryChainPreservesOnlyDecoderValidatedJwtWithGenuineJaflyPrincipal() {
+        var properties = configured();
+        var framework = new ResourceServerAutoConfiguration();
+        var converter = framework.fireflyJwtAuthenticationConverter(
+                framework.fireflyPrincipalFactory(framework.fireflyAuthorityMappingPort(properties)), properties);
+        var jwt = Jwt.withTokenValue("restricted-synthetic-assertion").header("alg", "RS256")
+                .issuer(RecoveryWebAuthorizationTest.ISSUER).subject("opaque/actor:one").audience(List.of("core-recovery"))
+                .claim("tenant_id", "opaque/tenant:one").claim("client_id", RecoveryWebAuthorizationTest.CLIENT)
+                .claim("principal_kind", "HUMAN").expiresAt(Instant.now().plusSeconds(60)).build();
+        var chain = new RecoverySecurityConfiguration().recoveryEnabledSecurityWebFilterChain(ServerHttpSecurity.http(),
+                compact -> "restricted-synthetic-assertion".equals(compact) ? Mono.just(jwt) : Mono.error(new IllegalStateException("invalid")),
+                converter, properties, new MockEnvironment().withProperty("firefly.security.resource-server.enabled", "true"),
+                RecoveryWebAuthorizationTest.ISSUER, "core-recovery", RecoveryAuditFixture.qualified());
+        var probe = new CredentialProbe();
+        var client = WebTestClient.bindToController(probe).webFilter(new WebFilterChainProxy(chain)).build();
+        client.post().uri("/api/v1/sca/recovery-operations").header("Authorization", "Bearer restricted-synthetic-assertion")
+                .exchange().expectStatus().isOk();
+        assertThat(probe.authentication.get()).isInstanceOf(RecoveryAuthenticationToken.class);
+        var authentication = (RecoveryAuthenticationToken) probe.authentication.get();
+        assertThat(authentication.getCredentials()).isSameAs(jwt);
+        assertThat(authentication.securityPrincipal().tenantId()).isEqualTo("opaque/tenant:one");
+        assertThat(authentication.toString()).doesNotContain("restricted-synthetic-assertion", "opaque/actor:one");
+        authentication.eraseCredentials();
+        assertThat(authentication.getCredentials()).isNull();
+    }
+
+    @RestController
+    static class CredentialProbe {
+        final java.util.concurrent.atomic.AtomicReference<org.springframework.security.core.Authentication> authentication = new java.util.concurrent.atomic.AtomicReference<>();
+        @org.springframework.web.bind.annotation.PostMapping("/api/v1/sca/recovery-operations")
+        Mono<String> receive() {
+            return org.springframework.security.core.context.ReactiveSecurityContextHolder.getContext().map(context -> {
+                authentication.set(context.getAuthentication());
+                return "verified";
+            });
+        }
+    }
+
     static ResourceServerProperties configured() {
         var properties = new ResourceServerProperties();
         properties.setIssuer(RecoveryWebAuthorizationTest.ISSUER);

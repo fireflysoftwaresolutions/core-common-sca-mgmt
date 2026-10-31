@@ -26,6 +26,9 @@ import io.fireflysoftware.core.sca.web.recovery.RecoveryWebAuthorization;
 import io.fireflysoftware.core.sca.web.recovery.RecoveryBoundaryAuditPort;
 import java.time.Duration;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import org.fireflyframework.web.idempotency.annotation.DisableIdempotency;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -66,6 +69,8 @@ public class SCARecoveryController {
     }
 
     @PostMapping
+    @DisableIdempotency
+    @ApiResponse(responseCode = "201", description = "Recovery response", content = @Content(schema = @Schema(implementation = RecoveryOperationResponse.class)))
     @Operation(operationId = "createRecoveryOperation", summary = "Create a precisely bound recovery operation",
             description = "Caller binding is comparison data, not trusted owner/native lock proof. Qualified core admission is independently required.")
     public Mono<ResponseEntity<RecoveryOperationResponse>> createRecoveryOperation(@RequestBody CreateRecoveryOperationRequest request) {
@@ -75,6 +80,8 @@ public class SCARecoveryController {
     }
 
     @PostMapping("/{operationId}/challenges")
+    @DisableIdempotency
+    @ApiResponse(responseCode = "201", description = "Recovery response", content = @Content(schema = @Schema(implementation = RecoveryChallengeResponse.class)))
     @Operation(operationId = "issueRecoveryChallenge", summary = "Issue an eligible enrolled-factor challenge")
     public Mono<ResponseEntity<RecoveryChallengeResponse>> issueRecoveryChallenge(@PathVariable UUID operationId,
             @RequestBody IssueRecoveryChallengeRequest request) {
@@ -84,6 +91,8 @@ public class SCARecoveryController {
     }
 
     @PostMapping("/{operationId}/verifications")
+    @DisableIdempotency
+    @ApiResponse(responseCode = "202", description = "Recovery response", content = @Content(schema = @Schema(implementation = RecoveryVerificationResponse.class)))
     @Operation(operationId = "verifyRecoveryChallenge", summary = "Submit proof for independent verification",
             description = "Acknowledgement only: no factor verdict, attempt count or remaining budget is disclosed. Submitted knowledge credentials are not accepted.")
     public Mono<ResponseEntity<RecoveryVerificationResponse>> verifyRecoveryChallenge(@PathVariable UUID operationId,
@@ -97,6 +106,8 @@ public class SCARecoveryController {
     }
 
     @PostMapping("/{operationId}/authorizations")
+    @DisableIdempotency
+    @ApiResponse(responseCode = "200", description = "Recovery response", content = @Content(schema = @Schema(implementation = RecoveryAuthorizationReceipt.class)))
     @Operation(operationId = "consumeRecoveryAuthorization", summary = "Consume one exact recovery authorization",
             description = "An owner-verifiable receipt does not establish native execution or unlock success.")
     public Mono<ResponseEntity<RecoveryAuthorizationReceipt>> consumeRecoveryAuthorization(@PathVariable UUID operationId,
@@ -107,6 +118,8 @@ public class SCARecoveryController {
     }
 
     @PostMapping("/{operationId}/executions")
+    @DisableIdempotency
+    @ApiResponse(responseCode = "204", description = "Recovery response", content = @Content)
     @Operation(operationId = "recordRecoveryExecution", summary = "Reconcile a receipt-bound executor outcome",
             description = "The independent qualified executor verifier must attest the outcome; request assertions do not prove provider success.")
     public Mono<ResponseEntity<Void>> recordRecoveryExecution(@PathVariable UUID operationId,
@@ -115,6 +128,47 @@ public class SCARecoveryController {
                         request != null && request.executionId() != null && request.outcome() != null,
                         service -> service.recordRecoveryExecution(operationId, request))
                 .thenReturn(ResponseEntity.noContent().<Void>build());
+    }
+
+    @PostMapping("/{operationId}/verifications/reservations")
+    @DisableIdempotency
+    @ApiResponse(responseCode = "201", description = "Committed verification reservation",
+            content = @Content(schema = @Schema(implementation = RecoveryVerificationReservation.class)))
+    @Operation(operationId = "reserveRecoveryVerification", summary = "Reserve a native verification before credential use")
+    public Mono<ResponseEntity<RecoveryVerificationReservation>> reserveRecoveryVerification(@PathVariable UUID operationId,
+            @RequestBody ReserveRecoveryVerificationRequest request) {
+        return invoke(request == null ? null : request.binding(), RecoveryAction.RESERVE_VERIFICATION, operationId,
+                        request != null && request.challengeId() != null,
+                        service -> service.reserveRecoveryVerification(operationId, request))
+                .switchIfEmpty(Mono.error(unavailable())).map(result -> ResponseEntity.status(HttpStatus.CREATED).body(result));
+    }
+
+    @PostMapping("/{operationId}/verifications/complete")
+    @DisableIdempotency
+    @ApiResponse(responseCode = "202", description = "Generic completion acknowledgement",
+            content = @Content(schema = @Schema(implementation = RecoveryVerificationResponse.class)))
+    @Operation(operationId = "completeRecoveryVerification", summary = "Complete the exact reserved verification with opaque native evidence")
+    public Mono<ResponseEntity<RecoveryVerificationResponse>> completeRecoveryVerification(@PathVariable UUID operationId,
+            @RequestBody CompleteRecoveryVerificationRequest request) {
+        return invoke(request == null ? null : request.binding(), RecoveryAction.COMPLETE_VERIFICATION, operationId,
+                        request != null && request.challengeId() != null && request.reservationId() != null
+                                && request.attestation() != null && !request.attestation().isBlank() && request.attestation().length() <= 16384,
+                        service -> service.completeRecoveryVerification(operationId, request))
+                .switchIfEmpty(Mono.error(unavailable()))
+                .map(result -> ResponseEntity.accepted().body(new RecoveryVerificationResponse(operationId, "ACKNOWLEDGED")));
+    }
+
+    @PostMapping("/{operationId}/authorizations/verify")
+    @DisableIdempotency
+    @ApiResponse(responseCode = "200", description = "Current stored consumed authorization",
+            content = @Content(schema = @Schema(implementation = RecoveryAuthorizationReceipt.class)))
+    @Operation(operationId = "verifyRecoveryAuthorization", summary = "Verify the stored execution-bound authorization under current admission")
+    public Mono<ResponseEntity<RecoveryAuthorizationReceipt>> verifyRecoveryAuthorization(@PathVariable UUID operationId,
+            @RequestBody VerifyRecoveryAuthorizationRequest request) {
+        return invoke(request == null ? null : request.binding(), RecoveryAction.VERIFY_AUTHORIZATION, operationId,
+                        request != null && request.executionId() != null && request.expiresAt() != null,
+                        service -> service.verifyRecoveryAuthorization(operationId, request))
+                .switchIfEmpty(Mono.error(unavailable())).map(ResponseEntity::ok);
     }
 
     private <T> Mono<T> invoke(RecoveryBinding binding, RecoveryAction action, UUID operation, boolean validShape,

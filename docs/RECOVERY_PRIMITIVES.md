@@ -1,14 +1,30 @@
 # Guarded recovery primitives — source candidate
 
-This additive candidate prepares the Core SCA owner for permanent-account recovery. It does **not** unlock a native identity, verify a password, supply an enrolled factor, establish a restricted recovery principal or create financial authority. Recovery is disabled by default. Ordinary legacy SCA CRUD cannot authorize recovery or access its separate records; the candidate receiving security chain also denies legacy runtime routes until an independently approved contract exists. Existing Java interfaces and generated SDK/specification files are not rewritten.
+This additive candidate prepares the Core SCA owner for permanent-account recovery. It does **not** unlock a native identity, verify a password, supply an enrolled factor, establish a restricted recovery principal or create financial authority. Recovery is disabled by default. Ordinary legacy SCA CRUD cannot authorize recovery or access its separate records; the candidate receiving security chain also denies legacy runtime routes until an independently approved contract exists. Existing five operations remain available. Generated SDK/specification files are not handwritten.
 
 ## Ownership and admission
 
-New operations live at `/api/v1/sca/recovery-operations`, with original-producer operation IDs `createRecoveryOperation`, `issueRecoveryChallenge`, `verifyRecoveryChallenge`, `consumeRecoveryAuthorization` and `recordRecoveryExecution`. They require both the bearer/current-policy receiver gate and the Core's independent qualified recovery admission. Body binding fields are comparison expectations, not identity or ownership evidence. Issuer, opaque tenant, subject, client and population must match the admitted actor; machine credentials and invented delegation headers cannot substitute for human recovery proof.
+New operations live at `/api/v1/sca/recovery-operations`, with original-producer operation IDs `createRecoveryOperation`, `issueRecoveryChallenge`, `verifyRecoveryChallenge`, `consumeRecoveryAuthorization` and `recordRecoveryExecution`, plus `reserveRecoveryVerification`, `completeRecoveryVerification` and `verifyRecoveryAuthorization`. They require both the bearer/current-policy receiver gate and the Core's independent qualified recovery admission. Body binding fields are comparison expectations, not identity or ownership evidence. Issuer, opaque tenant, subject, client and population must match the admitted actor; machine credentials and invented delegation headers cannot substitute for human recovery proof.
 
 The Core admission capability must independently establish the current population-specific identity link, exact target lock generation, purpose and supported action through an approved restricted recovery ceremony. Missing or unqualified capabilities prevent enablement. The default implementations refuse; there is no permissive sandbox/native substitute.
 
 The enabled receiver requires explicit HTTPS issuer/JWKS, intended audience, exact client/population allowlists, required opaque `tenant_id`, asymmetric JWT validation and current strict PDP permission. Unsupported obligations, expired identity/proof, missing context or policy failures deny. Failed attempts and acknowledgements must not disclose which factor was wrong, existence, remaining attempts or native account status. These source checks do not establish timing-side-channel resistance.
+
+## Native reservation and online reference contracts
+
+All paths are below `/api/v1/sca/recovery-operations/{operationId}`. The existing five paths retain their behavior. Additive operations are:
+
+| Operation | POST path | Success | Contract |
+| --- | --- | --- | --- |
+| `reserveRecoveryVerification` | `/verifications/reservations` | 201 | `binding`, `challengeId`; returns canonical operation/challenge/reservation UUIDs, provider ceremony reference, category and expiry only after commit |
+| `completeRecoveryVerification` | `/verifications/complete` | 202 | Exact binding/challenge/reservation and opaque native attestation; generic acknowledgement, no secret or verdict |
+| `verifyRecoveryAuthorization` | `/authorizations/verify` | 200 | Exact binding/execution/stored expiry; returns the stored consumed receipt only under fresh admission, database time, pending outcome and committed consumption audit |
+
+The reservation route is distinct from the existing `/verifications` operation. Pending reservation retries retain the same durable identity and spent attempt. Completion verifies only provider attestations under that exact reservation, never charges another attempt, and acknowledges completed retries without calling the provider again. Native password and enrolled-TOTP checks must happen after Core commits the corresponding reservation. The restricted bootstrap password ceremony supplies admission only. The qualified native adapter refuses generic verification requests that lack its exact reservation-bound attestation; the legacy verification surface cannot bypass native credential ordering.
+
+Every recovery controller operation opts out of generic HTTP idempotency/response caching. Its current caller/PDP gate executes for every request; only the owning durable body keys and execution identity implement retry behavior. The original producer declares all eight bearer operations and actual success statuses. The producer/generator remains the only source of SDKs.
+
+The recovery-only receiver preserves the actual decoder-validated JWT in request-local `RecoveryAuthenticationToken` credentials after genuine Jafly principal projection. This enables qualified native RPC adapters to relay the restricted actor assertion alongside independently authenticated workload transport. No assertion comes from an unsigned header/body, and no machine identity is converted into a human factor. Token output is redacted, credentials can be erased, and the stateless receiver never persists an authentication session.
 
 ## Protected storage and budgets
 
@@ -22,13 +38,19 @@ Raw knowledge credentials stay in their identity boundary. Core accepts only the
 
 ## Consumption and execution
 
-Consumption atomically checks the same immutable binding/generation, unexpired independent knowledge and possession evidence, budgets and unconsumed state, then records one execution identity and audit. Exact consume retries retain that execution identity; another key cannot manufacture another authorization. The receipt is an opaque online-verifiable reference, **not an executed native unlock**. A qualified executor still needs an approved receipt-verification mechanism, authoritative generation-bound idempotent transition and current authorization before acting. None is supplied by generic user `enabled=true`, existing SCA `VERIFIED` status or this distribution.
+Consumption atomically checks the same immutable binding/generation, unexpired independent knowledge and possession evidence, budgets and unconsumed state, then records one execution identity and audit. Exact consume retries retain that execution identity; another key cannot manufacture another authorization. The receipt is an opaque online-verifiable reference, **not an executed native unlock**. The online verification operation checks Core ownership; a qualified native executor must still supply an authoritative generation-bound idempotent transition and current authorization before acting. Native execution is not supplied by generic user `enabled=true`, existing SCA `VERIFIED` status or this distribution.
 
 Execution reporting verifies an authoritative executor journal and preserves monotonic outcomes. A timeout remains unknown and requires reconciliation under the same execution ID; consumed proof must not be reopened or converted into a new unlock. Native success, session revocation/current receiver blocking, customer/workforce factor enrollment, assisted identity reproofing and production/regulatory acceptance remain separate gates.
 
+## Durable boundary audit
+
+`firefly.sca.recovery.database-audit.enabled=true`, together with the global recovery switch, selects mapped database adapters for both Core rejection and receiving-boundary audit. The separately installed `sca_recovery_boundary_audit` table has no operation or target foreign key. Anonymous/malformed events contain only action/outcome and database time; admitted events may additionally contain verified actor issuer/tenant/subject/client/population. Unknown or submitted target IDs, tokens and proof bodies have no columns. The sink exposes acknowledgement only after the owning database transaction commits. Missing storage or failed writes deny the request; logging is not a fallback.
+
+The table has insert-only mapped repository exposure, runtime `SELECT, INSERT` privileges and owner-controlled update/delete/truncate guards. The existing operation audit keeps its nonnull operation FK. The database mode does not qualify native admission, factors, execution, production retention or installation approval.
+
 ## Qualification
 
-The maintained source includes Core policy tests, receiver/controller/original-producer contract tests and an explicitly selected `SCARecoveryRepositoryIT` PostgreSQL suite. Mock tests do not establish database concurrency or provider behavior. The real database suite must run, with no skips, through `-Precovery-postgres-it`; the qualification summary rejects a successful Maven result if that report is missing or skipped.
+The maintained source includes Core policy tests, receiver/controller/original-producer contract tests and explicitly selected `SCARecoveryRepositoryIT` and `SCARecoveryNativeContractIT` PostgreSQL suites. Mock tests do not establish database concurrency or provider behavior. The real database suite must run, with no skips, through `-Precovery-postgres-it`; the qualification summary rejects a successful Maven result if either required report is missing or skipped. Native-contract tests exercise the actual Core service, mapped repositories, transactions and audit sink with explicit synthetic native ports; they do not qualify a real Keycloak unlock.
 
 Hosted qualification uses only a newly created labelled disposable PostgreSQL container, random fixture secrets, original V1–V4 and the optional installer under separately restricted roles. It never selects a supplied existing database. The helper refuses local/non-hosted or remote-Docker execution and stops only its labelled container. Raw database/Maven logs, credentials and state are not uploaded.
 
@@ -43,3 +65,5 @@ Initial source preparation did not establish compilation, SQL installation, conc
 The owned empty fixture installed original V1–V4 and the optional recovery schema under separate owner/runtime roles; no existing database or production grant was selected. The explicit real-database report executed without skips. The original producer emitted the five additive bearer operations and acknowledgement-only verification schema. This does not publish an SDK, adopt the additive contract in the canonical consumer SDK, or prove a native unlock.
 
 The exact parent source remains `6442bd51733ade4d5f4583e1afe812dd2c520b40`, framework parent/BOM 26.10.23, with only the owning parent `relativePath` overlaid in the fixture. Recorded original POM SHA-256 is `d52105ec5496c686937b654f47a3c03368a471aa7a2d3ecb76e369dc029d2389`; fixture POM SHA-256 is `1bbc0a52144ac4e109cd5f6a9cba9ebc5ff30a7c1997a948e25e7c61049487f7`. Published parent adoption, service/SDK release, genuine owner/factor/native-lock/execution adapters, durable external audit sinks, Domain orchestration, full service-plus-native integration and production/regulatory acceptance remain unqualified. The default-off boundary remains in force.
+
+The eight-operation/native-reservation extension is a separate source revision from the 61-test baseline above. Its hosted result must be recorded at its exact revision before treating it as qualified.

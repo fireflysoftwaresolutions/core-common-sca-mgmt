@@ -19,6 +19,8 @@ package io.fireflysoftware.core.sca.web.config;
 
 import org.fireflyframework.security.rs.ResourceServerProperties;
 import io.fireflysoftware.core.sca.web.recovery.RecoveryBoundaryAuditPort;
+import io.fireflysoftware.core.sca.web.recovery.RecoveryAuthenticationToken;
+import org.fireflyframework.security.webflux.authentication.FireflyAuthenticationToken;
 import io.fireflysoftware.core.sca.interfaces.recovery.RecoveryAction;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -93,10 +95,17 @@ public class RecoverySecurityConfiguration {
         return stateless(http)
                 .exceptionHandling(errors -> errors.authenticationEntryPoint(entryPoint).accessDeniedHandler(deniedHandler))
                 .authorizeExchange(exchanges -> exchanges.pathMatchers(HttpMethod.POST, base,
-                                base + "/*/challenges", base + "/*/verifications", base + "/*/authorizations", base + "/*/executions")
+                                base + "/*/challenges", base + "/*/verifications", base + "/*/authorizations", base + "/*/executions",
+                                base + "/*/verifications/reservations", base + "/*/verifications/complete", base + "/*/authorizations/verify")
                         .authenticated().anyExchange().denyAll())
                 .oauth2ResourceServer(oauth -> oauth.authenticationEntryPoint(entryPoint).accessDeniedHandler(deniedHandler)
-                        .jwt(jwt -> jwt.jwtDecoder(decoder).jwtAuthenticationConverter(converter))).build();
+                        .jwt(jwt -> jwt.jwtDecoder(decoder).jwtAuthenticationConverter(verified ->
+                                Mono.defer(() -> converter.convert(verified)).map(converted -> {
+                                    if (!(converted instanceof FireflyAuthenticationToken firefly) || !converted.isAuthenticated()) {
+                                        throw new BadCredentialsException("Verified recovery principal required");
+                                    }
+                                    return new RecoveryAuthenticationToken(firefly, verified);
+                                })))).build();
     }
 
     public static void validate(ResourceServerProperties properties, Environment environment, String issuer, String audience) {
@@ -129,6 +138,11 @@ public class RecoverySecurityConfiguration {
             if (base.equals(path)) action = RecoveryAction.CREATE;
             else if (path.startsWith(base + "/")) {
                 String[] segments = path.substring(base.length() + 1).split("/", -1);
+                if (segments.length == 3) {
+                    if ("verifications".equals(segments[1]) && "reservations".equals(segments[2])) action = RecoveryAction.RESERVE_VERIFICATION;
+                    else if ("verifications".equals(segments[1]) && "complete".equals(segments[2])) action = RecoveryAction.COMPLETE_VERIFICATION;
+                    else if ("authorizations".equals(segments[1]) && "verify".equals(segments[2])) action = RecoveryAction.VERIFY_AUTHORIZATION;
+                }
                 if (segments.length == 2) action = switch (segments[1]) {
                     case "challenges" -> RecoveryAction.ISSUE_CHALLENGE;
                     case "verifications" -> RecoveryAction.VERIFY_CHALLENGE;

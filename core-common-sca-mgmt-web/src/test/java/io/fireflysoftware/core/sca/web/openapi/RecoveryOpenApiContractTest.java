@@ -33,7 +33,7 @@ class RecoveryOpenApiContractTest {
     private int port;
 
     @Test
-    void originalProducerExposesFiveAdditiveBearerOperationsAndAcknowledgementOnlyVerification() {
+    void originalProducerExposesEightBearerOperationsActualStatusesAndOpaqueNativeContracts() {
         WebTestClient.bindToServer().baseUrl("http://127.0.0.1:" + port).build()
                 .get().uri("/v3/api-docs").exchange().expectStatus().isOk().expectBody()
                 .jsonPath("$.components.securitySchemes.bearerAuth.type").isEqualTo("http")
@@ -43,8 +43,27 @@ class RecoveryOpenApiContractTest {
                 .jsonPath("$.paths['/api/v1/sca/recovery-operations/{operationId}/verifications'].post.operationId").isEqualTo("verifyRecoveryChallenge")
                 .jsonPath("$.paths['/api/v1/sca/recovery-operations/{operationId}/authorizations'].post.operationId").isEqualTo("consumeRecoveryAuthorization")
                 .jsonPath("$.paths['/api/v1/sca/recovery-operations/{operationId}/executions'].post.operationId").isEqualTo("recordRecoveryExecution")
+                .jsonPath("$.paths['/api/v1/sca/recovery-operations/{operationId}/verifications/reservations'].post.operationId").isEqualTo("reserveRecoveryVerification")
+                .jsonPath("$.paths['/api/v1/sca/recovery-operations/{operationId}/verifications/complete'].post.operationId").isEqualTo("completeRecoveryVerification")
+                .jsonPath("$.paths['/api/v1/sca/recovery-operations/{operationId}/authorizations/verify'].post.operationId").isEqualTo("verifyRecoveryAuthorization")
+                .jsonPath("$.paths['/api/v1/sca/recovery-operations'].post.responses['201']").exists()
+                .jsonPath("$.paths['/api/v1/sca/recovery-operations/{operationId}/challenges'].post.responses['201']").exists()
+                .jsonPath("$.paths['/api/v1/sca/recovery-operations/{operationId}/verifications'].post.responses['202']").exists()
+                .jsonPath("$.paths['/api/v1/sca/recovery-operations/{operationId}/executions'].post.responses['204']").exists()
+                .jsonPath("$.paths['/api/v1/sca/recovery-operations/{operationId}/verifications/reservations'].post.responses['201']").exists()
+                .jsonPath("$.paths['/api/v1/sca/recovery-operations/{operationId}/verifications/complete'].post.responses['202']").exists()
+                .jsonPath("$.paths['/api/v1/sca/recovery-operations/{operationId}/authorizations/verify'].post.responses['200']").exists()
                 .jsonPath("$.paths['/api/v1/sca/recovery-operations'].post.security[0].bearerAuth").isArray()
                 .jsonPath("$.paths['/api/v1/sca/recovery-operations/{operationId}/verifications'].post.security[0].bearerAuth").isArray()
+                .jsonPath("$.paths['/api/v1/sca/recovery-operations/{operationId}/verifications/reservations'].post.security[0].bearerAuth").isArray()
+                .jsonPath("$.paths['/api/v1/sca/recovery-operations/{operationId}/verifications/complete'].post.security[0].bearerAuth").isArray()
+                .jsonPath("$.paths['/api/v1/sca/recovery-operations/{operationId}/authorizations/verify'].post.security[0].bearerAuth").isArray()
+                .jsonPath("$.components.schemas.RecoveryVerificationReservation.properties.reservationId.format").isEqualTo("uuid")
+                .jsonPath("$.components.schemas.RecoveryVerificationReservation.properties.providerChallengeId").exists()
+                .jsonPath("$.components.schemas.RecoveryVerificationReservation.properties.category").exists()
+                .jsonPath("$.components.schemas.CompleteRecoveryVerificationRequest.properties.attestation").exists()
+                .jsonPath("$.components.schemas.CompleteRecoveryVerificationRequest.properties.password").doesNotExist()
+                .jsonPath("$.components.schemas.CompleteRecoveryVerificationRequest.properties.success").doesNotExist()
                 .jsonPath("$.components.schemas.RecoveryVerificationResponse.properties.operationId").exists()
                 .jsonPath("$.components.schemas.RecoveryVerificationResponse.properties.status").exists()
                 .jsonPath("$.components.schemas.RecoveryVerificationResponse.properties.accepted").doesNotExist()

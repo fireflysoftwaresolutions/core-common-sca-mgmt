@@ -141,6 +141,9 @@ public final class RecoveryWebAuthorization {
             case CREATE -> "sca.recovery.create";
             case ISSUE_CHALLENGE -> "sca.recovery.challenge.issue";
             case VERIFY_CHALLENGE -> "sca.recovery.challenge.verify";
+            case RESERVE_VERIFICATION -> "sca.recovery.verification.reserve";
+            case COMPLETE_VERIFICATION -> "sca.recovery.verification.complete";
+            case VERIFY_AUTHORIZATION -> "sca.recovery.authorization.verify";
             case CONSUME -> "sca.recovery.authorization.consume";
             case RECORD_EXECUTION -> "sca.recovery.execution.record";
         };

@@ -3,6 +3,7 @@ package io.fireflysoftware.core.sca.models.repositories;
 import io.fireflysoftware.core.sca.models.entities.SCARecoveryAudit;
 import io.fireflysoftware.core.sca.models.entities.SCARecoveryChallenge;
 import io.fireflysoftware.core.sca.models.entities.SCARecoveryOperation;
+import io.fireflysoftware.core.sca.models.entities.SCARecoveryBoundaryAudit;
 import io.r2dbc.spi.ConnectionFactories;
 import io.r2dbc.spi.ConnectionFactory;
 import io.r2dbc.spi.ConnectionFactoryOptions;
@@ -37,6 +38,7 @@ class SCARecoveryRepositoryIT {
     private static SCARecoveryOperationRepository operations;
     private static SCARecoveryChallengeRepository challenges;
     private static SCARecoveryAuditRepository audits;
+    private static SCARecoveryBoundaryAuditRepository boundaryAudits;
     private static TransactionalOperator transactions;
     private static String jdbcUrl;
     private static String user;
@@ -56,6 +58,7 @@ class SCARecoveryRepositoryIT {
         operations = factory.getRepository(SCARecoveryOperationRepository.class);
         challenges = factory.getRepository(SCARecoveryChallengeRepository.class);
         audits = factory.getRepository(SCARecoveryAuditRepository.class);
+        boundaryAudits = factory.getRepository(SCARecoveryBoundaryAuditRepository.class);
         transactions = TransactionalOperator.create(new R2dbcTransactionManager(connectionFactory));
         try (Connection connection = jdbc()) {
             assertEquals(user, scalar(connection, "SELECT current_user"));
@@ -308,6 +311,28 @@ class SCARecoveryRepositoryIT {
                 }
             }
             try (PreparedStatement statement = connection.prepareStatement("TRUNCATE public.sca_recovery_audit")) {
+                assertEquals("42501", assertThrows(SQLException.class, statement::execute).getSQLState());
+            }
+        }
+    }
+
+    @Test
+    void boundaryAuditNeedsNoOperationAndRuntimeCannotMutateOrTruncateIt() throws SQLException {
+        SCARecoveryBoundaryAudit event = new SCARecoveryBoundaryAudit();
+        event.setId(UUID.randomUUID());
+        event.setOutcome("REFUSED");
+        event.setOccurredAt(now());
+        boundaryAudits.save(event).block(TIMEOUT);
+        try (Connection connection = jdbc()) {
+            assertEquals("0", scalar(connection, "SELECT count(*) FROM pg_constraint WHERE conrelid = 'public.sca_recovery_boundary_audit'::regclass AND contype = 'f'"));
+            for (String sql : List.of("UPDATE public.sca_recovery_boundary_audit SET outcome = 'ADMITTED' WHERE id = ?",
+                    "DELETE FROM public.sca_recovery_boundary_audit WHERE id = ?")) {
+                try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                    statement.setObject(1, event.getId());
+                    assertEquals("42501", assertThrows(SQLException.class, statement::executeUpdate).getSQLState());
+                }
+            }
+            try (PreparedStatement statement = connection.prepareStatement("TRUNCATE public.sca_recovery_boundary_audit")) {
                 assertEquals("42501", assertThrows(SQLException.class, statement::execute).getSQLState());
             }
         }
