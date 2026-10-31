@@ -50,6 +50,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 /** Real HTTPS transport with a trusted ephemeral fixture CA; never native-provider acceptance. */
 class NativeOwnerRpcClientTest {
@@ -170,6 +171,34 @@ class NativeOwnerRpcClientTest {
                 RecoveryFactorCategory.POSSESSION, properties.getProviderId(), "enrollment", "independent-origin", "ceremony", Instant.now().plusSeconds(30));
         assertThrows(RecoveryDeniedException.class, () -> adapter.verify(context, reference, RecoveryProofKind.POSSESSION_RESPONSE, "123456")
                 .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication)).block(Duration.ofSeconds(5)));
+        assertEquals(0, requests.get());
+    }
+
+    @Test
+    void explicitRemoteAndDatabaseModesWireExactlyOneConcretePortForEachCapability() {
+        new org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner()
+                .withUserConfiguration(RecoveryConfiguration.class, NativeOwnerConfiguration.class,
+                        DatabaseRecoveryAuditSink.class, DatabaseRecoveryRejectionAuditAdapter.class,
+                        io.fireflysoftware.core.sca.web.recovery.DatabaseRecoveryBoundaryAuditAdapter.class)
+                .withBean(io.r2dbc.spi.ConnectionFactory.class, () -> mock(io.r2dbc.spi.ConnectionFactory.class))
+                .withBean(io.fireflysoftware.core.sca.models.repositories.SCARecoveryOperationRepository.class,
+                        () -> mock(io.fireflysoftware.core.sca.models.repositories.SCARecoveryOperationRepository.class))
+                .withBean(io.fireflysoftware.core.sca.models.repositories.SCARecoveryBoundaryAuditRepository.class,
+                        () -> mock(io.fireflysoftware.core.sca.models.repositories.SCARecoveryBoundaryAuditRepository.class))
+                .withPropertyValues("firefly.sca.recovery.enabled=true", "firefly.sca.recovery.native-owner.enabled=true",
+                        "firefly.sca.recovery.database-audit.enabled=true", "firefly.sca.recovery.receiver.issuer=" + issuer,
+                        "firefly.sca.recovery.receiver.audience=core-recovery",
+                        "firefly.sca.recovery.native-owner.base-url=" + properties.getBaseUrl(),
+                        "firefly.sca.recovery.native-owner.provider-id=" + properties.getProviderId(),
+                        "firefly.sca.recovery.native-owner.workload-client-id=core-native-rpc",
+                        "firefly.sca.recovery.native-owner.workload-secret-file=" + properties.getWorkloadSecretFile())
+                .run(context -> {
+                    org.assertj.core.api.Assertions.assertThat(context).hasNotFailed()
+                            .hasSingleBean(RecoveryAdmissionPort.class).hasSingleBean(RecoveryFactorProvider.class)
+                            .hasSingleBean(RecoveryExecutionVerifier.class).hasSingleBean(RecoveryRejectionAuditPort.class)
+                            .hasSingleBean(io.fireflysoftware.core.sca.web.recovery.RecoveryBoundaryAuditPort.class);
+                    assertInstanceOf(RemoteNativeRecoveryAdapter.class, context.getBean(RecoveryAdmissionPort.class));
+                });
         assertEquals(0, requests.get());
     }
 

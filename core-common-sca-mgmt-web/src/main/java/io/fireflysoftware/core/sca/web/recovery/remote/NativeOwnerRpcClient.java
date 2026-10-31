@@ -73,6 +73,7 @@ public final class NativeOwnerRpcClient {
                             || !authentication.isAuthenticated() || !(authentication.getCredentials() instanceof Jwt jwt)) throw new RecoveryDeniedException();
                     Instant now = Instant.now();
                     if (expected == null || !issuer.equals(expected.issuer()) || !issuer.equals(expected.targetIssuer())
+                            || jwt.getTokenValue().length() > 16384
                             || jwt.getIssuer() == null || !issuer.equals(jwt.getIssuer().toString())
                             || !expected.actorSubject().equals(jwt.getSubject()) || !jwt.getAudience().contains(audience)
                             || jwt.getExpiresAt() == null || !now.isBefore(jwt.getExpiresAt())
