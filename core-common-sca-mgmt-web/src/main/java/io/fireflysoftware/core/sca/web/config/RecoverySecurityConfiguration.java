@@ -84,11 +84,11 @@ public class RecoverySecurityConfiguration {
         ServerAuthenticationEntryPoint entryPoint = (exchange, error) -> auditRefusal(audit, exchange)
                 .then(Mono.defer(() -> new BearerTokenServerAuthenticationEntryPoint().commence(exchange,
                         new BadCredentialsException("Verified recovery caller required"))))
-                .onErrorResume(error -> auditUnavailable(exchange));
+                .onErrorResume(auditFailure -> auditUnavailable(exchange));
         ServerAccessDeniedHandler deniedHandler = (exchange, error) -> auditRefusal(audit, exchange)
                 .then(Mono.defer(() -> new BearerTokenServerAccessDeniedHandler().handle(exchange,
                         new AccessDeniedException("Recovery route refused"))))
-                .onErrorResume(error -> auditUnavailable(exchange));
+                .onErrorResume(auditFailure -> auditUnavailable(exchange));
         String base = "/api/v1/sca/recovery-operations";
         return stateless(http)
                 .exceptionHandling(errors -> errors.authenticationEntryPoint(entryPoint).accessDeniedHandler(deniedHandler))
