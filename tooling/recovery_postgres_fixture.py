@@ -21,6 +21,9 @@ def command(arguments, **kwargs):
 def require_hosted():
     if os.environ.get('GITHUB_ACTIONS') != 'true' or os.environ.get('RUNNER_OS') != 'Linux':
         raise RuntimeError('This fixture is restricted to its hosted ephemeral runner')
+    if any(os.environ.get(name) for name in ('DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_CONFIG',
+                                            'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH')):
+        raise RuntimeError('Docker daemon-selection overrides are not admitted')
     endpoint = command(['docker', 'context', 'inspect', '--format', '{{json .Endpoints.docker.Host}}'], text=True).stdout
     if not json.loads(endpoint).startswith('unix://'):
         raise RuntimeError('Only the local hosted Docker daemon is admitted')

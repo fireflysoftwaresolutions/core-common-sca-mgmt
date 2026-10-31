@@ -228,10 +228,15 @@ class SCARecoveryRepositoryIT {
         save(first);
         save(second);
         SCARecoveryChallenge accepted = challenge(first, "POSSESSION", true, now().plusSeconds(500));
-        insertChallenge(accepted).block(TIMEOUT);
+        SCARecoveryChallenge persisted = insertChallenge(accepted).block(TIMEOUT);
+        assertNotNull(persisted);
+        assertTrue(persisted.getVerified());
+        assertNotNull(persisted.getAttestationId());
         SCARecoveryChallenge replay = challenge(second, "POSSESSION", true, now().plusSeconds(500));
-        replay.setProviderId(accepted.getProviderId());
-        replay.setAttestationId(accepted.getAttestationId());
+        assertNotEquals(persisted.getIssueReservationId(), replay.getIssueReservationId());
+        assertNotEquals(persisted.getProviderChallengeId(), replay.getProviderChallengeId());
+        replay.setProviderId(persisted.getProviderId());
+        replay.setAttestationId(persisted.getAttestationId());
         assertDatabaseState("23505", () -> insertChallenge(replay).block(TIMEOUT));
     }
 
