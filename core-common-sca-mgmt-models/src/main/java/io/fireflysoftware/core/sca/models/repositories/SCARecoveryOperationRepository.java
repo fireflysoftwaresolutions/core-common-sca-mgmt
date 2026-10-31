@@ -22,6 +22,7 @@ import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public interface SCARecoveryOperationRepository extends ReactiveCrudRepository<SCARecoveryOperation, UUID> {
@@ -29,5 +30,9 @@ public interface SCARecoveryOperationRepository extends ReactiveCrudRepository<S
             String issuer, String tenant, String clientId, String actorSubject, String createKey);
 
     @Query("SELECT clock_timestamp()")
-    Mono<Instant> databaseNow();
+    Mono<OffsetDateTime> databaseTime();
+
+    default Mono<Instant> databaseNow() {
+        return databaseTime().map(OffsetDateTime::toInstant);
+    }
 }
