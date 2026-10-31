@@ -61,6 +61,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -384,7 +386,7 @@ class SCARecoveryServiceTest {
     @Test
     void optimisticReservationRetryDoesNotInvokeProviderUntilAReservationCommits() {
         java.util.concurrent.atomic.AtomicInteger saves = new java.util.concurrent.atomic.AtomicInteger();
-        when(operations.save(any())).thenAnswer(invocation -> {
+        doAnswer(invocation -> {
             if (saves.getAndIncrement() == 0) {
                 UUID challengeId = challenge.getId();
                 operation = operation();
@@ -393,7 +395,7 @@ class SCARecoveryServiceTest {
                 return Mono.error(new OptimisticLockingFailureException("conflict"));
             }
             return Mono.just(invocation.getArgument(0));
-        });
+        }).when(operations).save(any());
         StepVerifier.create(service.verifyRecoveryChallenge(operationId, request())).expectNextCount(1).verifyComplete();
         assertEquals(1, operation.getAttemptCount());
         verify(factors, times(1)).verify(any(), any(), any(), anyString());
@@ -453,7 +455,7 @@ class SCARecoveryServiceTest {
 
     @Test
     void auditFailureCannotBeReportedAsAcceptedTransition() {
-        when(audits.save(any())).thenReturn(Mono.error(new IllegalStateException("audit unavailable")));
+        doReturn(Mono.error(new IllegalStateException("audit unavailable"))).when(audits).save(any());
         StepVerifier.create(service.verifyRecoveryChallenge(operationId, request()))
                 .expectError(IllegalStateException.class).verify();
     }
