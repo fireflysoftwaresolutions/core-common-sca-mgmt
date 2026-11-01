@@ -22,7 +22,7 @@ import io.fireflysoftware.core.sca.core.recovery.RecoveryProperties;
 import io.fireflysoftware.core.sca.core.recovery.RecoveryUnavailableException;
 import io.fireflysoftware.core.sca.core.recovery.SCARecoveryService;
 import io.fireflysoftware.core.sca.interfaces.recovery.*;
-import io.fireflysoftware.core.sca.web.recovery.RecoveryWebAuthorization;
+import io.fireflysoftware.core.sca.web.recovery.RecoveryWebAuthorizationImpl;
 import io.fireflysoftware.core.sca.web.recovery.RecoveryBoundaryAuditPort;
 import java.time.Duration;
 import io.swagger.v3.oas.annotations.Operation;
@@ -56,12 +56,12 @@ import java.util.function.Function;
         @ApiResponse(responseCode = "503", description = "Recovery disabled or qualified capability unavailable")})
 public class SCARecoveryController {
     private final ObjectProvider<SCARecoveryService> services;
-    private final ObjectProvider<RecoveryWebAuthorization> authorizations;
+    private final ObjectProvider<RecoveryWebAuthorizationImpl> authorizations;
     private final RecoveryProperties properties;
     private final ObjectProvider<RecoveryBoundaryAuditPort> audits;
 
     public SCARecoveryController(ObjectProvider<SCARecoveryService> services,
-            ObjectProvider<RecoveryWebAuthorization> authorizations, RecoveryProperties properties, ObjectProvider<RecoveryBoundaryAuditPort> audits) {
+            ObjectProvider<RecoveryWebAuthorizationImpl> authorizations, RecoveryProperties properties, ObjectProvider<RecoveryBoundaryAuditPort> audits) {
         this.services = services;
         this.authorizations = authorizations;
         this.properties = properties;
@@ -181,7 +181,7 @@ public class SCARecoveryController {
                 return Mono.defer(() -> audit.record(new RecoveryBoundaryAuditPort.Event(null, action, RecoveryBoundaryAuditPort.Outcome.REFUSED)))
                         .timeout(Duration.ofSeconds(5)).then(Mono.<T>error(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid recovery request")));
             }
-            RecoveryWebAuthorization authorization = authorizations.getIfAvailable();
+            RecoveryWebAuthorizationImpl authorization = authorizations.getIfAvailable();
             if (authorization == null) return Mono.error(unavailable());
             return authorization.authorize(binding, action, operation).then(Mono.defer(() -> {
                 SCARecoveryService service = services.getIfAvailable();

@@ -59,8 +59,8 @@ class RecoveryWebAuthorizationTest {
         return SecurityPrincipal.builder().issuer(ISSUER).tenantId("opaque/tenant:one").subject("opaque/actor:one").claims(claims).build();
     }
 
-    static RecoveryWebAuthorization guard(Mono<SecurityPrincipal> principal, PolicyDecisionPort policy) {
-        return new RecoveryWebAuthorization(() -> principal, policy, RecoveryAuditFixture.qualified(), ISSUER, "core-recovery", List.of(CLIENT), List.of("HUMAN"), CLOCK);
+    static RecoveryWebAuthorizationImpl guard(Mono<SecurityPrincipal> principal, PolicyDecisionPort policy) {
+        return new RecoveryWebAuthorizationImpl(() -> principal, policy, RecoveryAuditFixture.qualified(), ISSUER, "core-recovery", List.of(CLIENT), List.of("HUMAN"), CLOCK);
     }
 
     private void refused(Mono<?> result, HttpStatus status) {
@@ -132,7 +132,7 @@ class RecoveryWebAuthorizationTest {
     void proofThatExpiresDuringPolicyDecisionIsRefused() {
         Clock changing = org.mockito.Mockito.mock(Clock.class);
         org.mockito.Mockito.when(changing.instant()).thenReturn(NOW, NOW.plusSeconds(301));
-        var authorization = new RecoveryWebAuthorization(() -> Mono.just(principal(Map.of())),
+        var authorization = new RecoveryWebAuthorizationImpl(() -> Mono.just(principal(Map.of())),
                 (p, a, r, c) -> Mono.just(Decision.permit()), RecoveryAuditFixture.qualified(), ISSUER, "core-recovery", List.of(CLIENT), List.of("HUMAN"), changing);
         refused(authorization.authorize(binding(), RecoveryAction.CREATE, null), HttpStatus.FORBIDDEN);
     }
@@ -145,7 +145,7 @@ class RecoveryWebAuthorizationTest {
                 @Override public boolean isQualified() { return true; }
                 @Override public Mono<Void> record(Event event) { return Mono.fromRunnable(() -> events.add(event)); }
             };
-            var authorization = new RecoveryWebAuthorization(() -> missing ? Mono.empty() : Mono.just(principal(Map.of())),
+            var authorization = new RecoveryWebAuthorizationImpl(() -> missing ? Mono.empty() : Mono.just(principal(Map.of())),
                     (p, a, r, c) -> Mono.just(Decision.deny("private-policy-url")), audit,
                     ISSUER, "core-recovery", List.of(CLIENT), List.of("HUMAN"), CLOCK);
             StepVerifier.create(authorization.authorize(binding(), RecoveryAction.CREATE, null)).expectError(ResponseStatusException.class).verify();
@@ -167,18 +167,18 @@ class RecoveryWebAuthorizationTest {
                 });
             }
         };
-        var permitted = new RecoveryWebAuthorization(() -> Mono.just(principal(Map.of())), (p, a, r, c) -> Mono.just(Decision.permit()),
+        var permitted = new RecoveryWebAuthorizationImpl(() -> Mono.just(principal(Map.of())), (p, a, r, c) -> Mono.just(Decision.permit()),
                 successful, ISSUER, "core-recovery", List.of(CLIENT), List.of("HUMAN"), CLOCK);
         StepVerifier.create(permitted.authorize(binding(), RecoveryAction.CREATE, null)).verifyComplete();
         assertThat(admitted).hasValue(1);
         RecoveryBoundaryAuditPort unavailable = event -> Mono.empty();
-        assertThatThrownBy(() -> new RecoveryWebAuthorization(() -> Mono.empty(), (p, a, r, c) -> Mono.just(Decision.permit()),
+        assertThatThrownBy(() -> new RecoveryWebAuthorizationImpl(() -> Mono.empty(), (p, a, r, c) -> Mono.just(Decision.permit()),
                 unavailable, ISSUER, "core-recovery", List.of(CLIENT), List.of("HUMAN"), CLOCK)).isInstanceOf(IllegalStateException.class);
         RecoveryBoundaryAuditPort failed = new RecoveryBoundaryAuditPort() {
             @Override public boolean isQualified() { return true; }
             @Override public Mono<Void> record(Event event) { return Mono.error(new IllegalStateException("private-audit-detail")); }
         };
-        var authorization = new RecoveryWebAuthorization(() -> Mono.just(principal(Map.of())), (p, a, r, c) -> Mono.just(Decision.permit()),
+        var authorization = new RecoveryWebAuthorizationImpl(() -> Mono.just(principal(Map.of())), (p, a, r, c) -> Mono.just(Decision.permit()),
                 failed, ISSUER, "core-recovery", List.of(CLIENT), List.of("HUMAN"), CLOCK);
         refused(authorization.authorize(binding(), RecoveryAction.CREATE, null), HttpStatus.SERVICE_UNAVAILABLE);
     }
@@ -197,9 +197,9 @@ class RecoveryWebAuthorizationTest {
         claims.remove("client_id"); claims.put("azp", CLIENT);
         refused(guard(Mono.just(principal(Map.of()).toBuilder().claims(claims).build()), (p, a, r, c) -> Mono.just(Decision.permit()))
                 .authorize(binding(), RecoveryAction.CREATE, null), HttpStatus.FORBIDDEN);
-        assertThatThrownBy(() -> new RecoveryWebAuthorization(() -> Mono.empty(), (p, a, r, c) -> Mono.just(Decision.permit()),
+        assertThatThrownBy(() -> new RecoveryWebAuthorizationImpl(() -> Mono.empty(), (p, a, r, c) -> Mono.just(Decision.permit()),
                 RecoveryAuditFixture.qualified(), ISSUER, "core-recovery", List.of(), List.of("HUMAN"), CLOCK)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new RecoveryWebAuthorization(() -> Mono.empty(), (p, a, r, c) -> Mono.just(Decision.permit()),
+        assertThatThrownBy(() -> new RecoveryWebAuthorizationImpl(() -> Mono.empty(), (p, a, r, c) -> Mono.just(Decision.permit()),
                 RecoveryAuditFixture.qualified(), ISSUER, "core-recovery", List.of(CLIENT), List.of("MACHINE"), CLOCK)).isInstanceOf(IllegalArgumentException.class);
     }
 }

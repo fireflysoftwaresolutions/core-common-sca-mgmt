@@ -38,14 +38,14 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 class SCARecoveryControllerTest {
-    private WebTestClient client(SCARecoveryService service, RecoveryWebAuthorization authorization, boolean enabled) {
+    private WebTestClient client(SCARecoveryService service, RecoveryWebAuthorizationImpl authorization, boolean enabled) {
         StaticListableBeanFactory beans = new StaticListableBeanFactory();
         if (service != null) beans.addBean("service", service);
         beans.addBean("audit", RecoveryAuditFixture.qualified());
         if (authorization != null) beans.addBean("authorization", authorization);
         RecoveryProperties properties = new RecoveryProperties(); properties.setEnabled(enabled);
         return WebTestClient.bindToController(new SCARecoveryController(beans.getBeanProvider(SCARecoveryService.class),
-                beans.getBeanProvider(RecoveryWebAuthorization.class), properties, beans.getBeanProvider(RecoveryBoundaryAuditPort.class))).build();
+                beans.getBeanProvider(RecoveryWebAuthorizationImpl.class), properties, beans.getBeanProvider(RecoveryBoundaryAuditPort.class))).build();
     }
 
     @Test
@@ -117,7 +117,7 @@ class SCARecoveryControllerTest {
                 (p, a, r, c) -> Mono.just(Decision.permit())));
         RecoveryProperties properties = new RecoveryProperties(); properties.setEnabled(true);
         var controller = new SCARecoveryController(beans.getBeanProvider(SCARecoveryService.class),
-                beans.getBeanProvider(RecoveryWebAuthorization.class), properties, beans.getBeanProvider(RecoveryBoundaryAuditPort.class));
+                beans.getBeanProvider(RecoveryWebAuthorizationImpl.class), properties, beans.getBeanProvider(RecoveryBoundaryAuditPort.class));
         WebTestClient.bindToController(controller)
                 .controllerAdvice(new RecoveryInputErrorHandler(beans.getBeanProvider(RecoveryBoundaryAuditPort.class), properties)).build()
                 .post().uri("/api/v1/sca/recovery-operations").contentType(MediaType.APPLICATION_JSON)

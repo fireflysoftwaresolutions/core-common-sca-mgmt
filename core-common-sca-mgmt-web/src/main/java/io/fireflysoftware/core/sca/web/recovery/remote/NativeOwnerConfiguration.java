@@ -27,13 +27,13 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnProperty(name = {"firefly.sca.recovery.enabled", "firefly.sca.recovery.native-owner.enabled"}, havingValue = "true")
 public class NativeOwnerConfiguration {
     @Bean
-    NativeOwnerRpcClient nativeOwnerRpcClient(NativeOwnerProperties properties,
+    NativeOwnerRpcClientImpl nativeOwnerRpcClient(NativeOwnerProperties properties,
             @Value("${firefly.sca.recovery.receiver.issuer}") String issuer,
             @Value("${firefly.sca.recovery.receiver.audience}") String audience) {
-        return new NativeOwnerRpcClient(properties, issuer, audience);
+        return new NativeOwnerRpcClientImpl(properties, issuer, audience);
     }
     @Bean
-    RemoteNativeRecoveryAdapter remoteNativeRecoveryAdapter(NativeOwnerRpcClient client, NativeOwnerProperties properties) {
-        return new RemoteNativeRecoveryAdapter(client, properties);
+    RemoteNativeRecoveryAdapterImpl remoteNativeRecoveryAdapter(NativeOwnerRpcClientImpl client, NativeOwnerProperties properties) {
+        return new RemoteNativeRecoveryAdapterImpl(client, properties);
     }
 }

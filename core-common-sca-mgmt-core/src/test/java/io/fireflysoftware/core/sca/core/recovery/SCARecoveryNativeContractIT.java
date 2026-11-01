@@ -45,7 +45,7 @@ class SCARecoveryNativeContractIT {
     private SCARecoveryService service;
     private SCARecoveryOperationRepository operations;
     private SCARecoveryChallengeRepository challenges;
-    private DatabaseRecoveryAuditSink sink;
+    private DatabaseRecoveryAuditSinkImpl sink;
     private RecoveryBinding binding;
     private final AtomicInteger factorReads = new AtomicInteger();
 
@@ -59,7 +59,7 @@ class SCARecoveryNativeContractIT {
         challenges = factory.getRepository(SCARecoveryChallengeRepository.class);
         var audits = factory.getRepository(SCARecoveryAuditRepository.class);
         var transactions = TransactionalOperator.create(new R2dbcTransactionManager(connectionFactory));
-        sink = new DatabaseRecoveryAuditSink(factory.getRepository(SCARecoveryBoundaryAuditRepository.class), operations, transactions);
+        sink = new DatabaseRecoveryAuditSinkImpl(factory.getRepository(SCARecoveryBoundaryAuditRepository.class), operations, transactions);
         binding = new RecoveryBinding("fixture-issuer", "fixture-tenant", "client-" + UUID.randomUUID(), null,
                 "fixture-actor", "fixture-target-issuer", "fixture-realm", "subject-" + UUID.randomUUID(),
                 "HUMAN", "PERMANENT_AUTHENTICATION_UNLOCK", "fixture-generation");
@@ -96,7 +96,7 @@ class SCARecoveryNativeContractIT {
         var properties = new RecoveryProperties();
         properties.setEnabled(true);
         service = new SCARecoveryServiceImpl(operations, challenges, audits, transactions, admission, factors,
-                executor, properties, new DatabaseRecoveryRejectionAuditAdapter(sink));
+                executor, properties, new DatabaseRecoveryRejectionAuditAdapterImpl(sink));
     }
 
     @Test

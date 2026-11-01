@@ -33,14 +33,14 @@ import java.nio.file.Files;
 import java.time.Instant;
 import java.util.Set;
 
-public final class NativeOwnerRpcClient {
+public final class NativeOwnerRpcClientImpl {
     private final NativeOwnerProperties properties;
     private final String issuer;
     private final String audience;
     private final String workloadSecret;
     private final WebClient http;
 
-    public NativeOwnerRpcClient(NativeOwnerProperties properties, String issuer, String audience) {
+    public NativeOwnerRpcClientImpl(NativeOwnerProperties properties, String issuer, String audience) {
         this(properties, issuer, audience, httpBuilder(properties, issuer, audience));
     }
 
@@ -51,7 +51,7 @@ public final class NativeOwnerRpcClient {
         return WebClient.builder().clientConnector(new ReactorClientHttpConnector(transport));
     }
 
-    NativeOwnerRpcClient(NativeOwnerProperties properties, String issuer, String audience, WebClient.Builder builder) {
+    NativeOwnerRpcClientImpl(NativeOwnerProperties properties, String issuer, String audience, WebClient.Builder builder) {
         properties.validate(issuer, audience);
         this.properties = properties;
         this.issuer = issuer;

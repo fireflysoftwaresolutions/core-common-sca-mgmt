@@ -42,9 +42,9 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Verifies caller expectations only; core owner/native admission remains a separate mandatory gate. */
-@Component
+@Component("recoveryWebAuthorization")
 @ConditionalOnProperty(name = "firefly.sca.recovery.enabled", havingValue = "true")
-public final class RecoveryWebAuthorization {
+public final class RecoveryWebAuthorizationImpl {
     private final SecurityContextPort securityContext;
     private final PolicyDecisionPort policy;
     private final RecoveryBoundaryAuditPort audit;
@@ -55,7 +55,7 @@ public final class RecoveryWebAuthorization {
     private final Clock clock;
 
     @Autowired
-    public RecoveryWebAuthorization(SecurityContextPort securityContext, PolicyDecisionPort policy, RecoveryBoundaryAuditPort audit,
+    public RecoveryWebAuthorizationImpl(SecurityContextPort securityContext, PolicyDecisionPort policy, RecoveryBoundaryAuditPort audit,
             @Value("${firefly.sca.recovery.receiver.issuer}") String issuer,
             @Value("${firefly.sca.recovery.receiver.audience}") String audience,
             @Value("${firefly.sca.recovery.receiver.allowed-clients}") List<String> clients,
@@ -63,7 +63,7 @@ public final class RecoveryWebAuthorization {
         this(securityContext, policy, audit, issuer, audience, clients, populations, Clock.systemUTC());
     }
 
-    public RecoveryWebAuthorization(SecurityContextPort securityContext, PolicyDecisionPort policy, RecoveryBoundaryAuditPort audit, String issuer,
+    public RecoveryWebAuthorizationImpl(SecurityContextPort securityContext, PolicyDecisionPort policy, RecoveryBoundaryAuditPort audit, String issuer,
             String audience, List<String> clients, List<String> populations, Clock clock) {
         if (securityContext == null || policy == null || blank(issuer) || blank(audience) || clock == null
                 || invalidList(clients) || invalidList(populations) || !Set.of("HUMAN", "STAFF").containsAll(populations)) {

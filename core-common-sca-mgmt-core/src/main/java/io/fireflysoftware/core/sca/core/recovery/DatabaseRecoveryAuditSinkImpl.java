@@ -28,14 +28,14 @@ import reactor.core.publisher.Mono;
 import java.util.Set;
 import java.util.UUID;
 
-@Component
+@Component("databaseRecoveryAuditSink")
 @ConditionalOnProperty(name = {"firefly.sca.recovery.enabled", "firefly.sca.recovery.database-audit.enabled"}, havingValue = "true")
-public final class DatabaseRecoveryAuditSink {
+public final class DatabaseRecoveryAuditSinkImpl {
     private final SCARecoveryBoundaryAuditRepository audits;
     private final SCARecoveryOperationRepository clock;
     private final TransactionalOperator transactions;
 
-    public DatabaseRecoveryAuditSink(SCARecoveryBoundaryAuditRepository audits, SCARecoveryOperationRepository clock,
+    public DatabaseRecoveryAuditSinkImpl(SCARecoveryBoundaryAuditRepository audits, SCARecoveryOperationRepository clock,
             @Qualifier("recoveryTransactionOperator") TransactionalOperator transactions) {
         this.audits = audits;
         this.clock = clock;

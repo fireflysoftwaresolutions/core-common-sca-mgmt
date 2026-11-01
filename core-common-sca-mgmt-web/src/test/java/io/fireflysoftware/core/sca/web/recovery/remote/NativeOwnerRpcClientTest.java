@@ -63,7 +63,7 @@ class NativeOwnerRpcClientTest {
     private static final AtomicReference<String> authorization = new AtomicReference<>();
     private static final AtomicReference<String> body = new AtomicReference<>();
     private NativeOwnerProperties properties;
-    private NativeOwnerRpcClient client;
+    private NativeOwnerRpcClientImpl client;
     private RecoveryBinding binding;
     private RecoveryAuthenticationToken authentication;
 
@@ -145,15 +145,15 @@ class NativeOwnerRpcClientTest {
 
     @Test
     void untrustedCertificateAndHttpConfigurationAreRefused() {
-        assertThrows(RecoveryUnavailableException.class, () -> request(new NativeOwnerRpcClient(properties, issuer, "core-recovery"))
+        assertThrows(RecoveryUnavailableException.class, () -> request(new NativeOwnerRpcClientImpl(properties, issuer, "core-recovery"))
                 .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication)).block(Duration.ofSeconds(5)));
         properties.setBaseUrl(URI.create(issuer.replace("https:", "http:") + "/firefly-recovery/rpc"));
-        assertThrows(IllegalStateException.class, () -> new NativeOwnerRpcClient(properties, issuer, "core-recovery"));
+        assertThrows(IllegalStateException.class, () -> new NativeOwnerRpcClientImpl(properties, issuer, "core-recovery"));
     }
 
     @Test
     void nativeAdmissionRequiresExactCanonicalBindingAndCurrentAction() {
-        var adapter = new RemoteNativeRecoveryAdapter(client, properties);
+        var adapter = new RemoteNativeRecoveryAdapterImpl(client, properties);
         reply.set(new Reply(200, "{\"binding\":" + bindingJson() + ",\"ownerLinkId\":\"owner-link\",\"identityLinkAttestationId\":\"link-attestation\",\"lockAttestationId\":\"generation\",\"validUntil\":\"" + Instant.now().plusSeconds(30) + "\",\"action\":\"RESERVE_VERIFICATION\"}", null, 0));
         var context = adapter.admit(binding, RecoveryAction.RESERVE_VERIFICATION)
                 .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication)).block(Duration.ofSeconds(5));
@@ -165,7 +165,7 @@ class NativeOwnerRpcClientTest {
 
     @Test
     void rawPossessionResponseNeverCrossesTheRemoteAdapter() {
-        var adapter = new RemoteNativeRecoveryAdapter(client, properties);
+        var adapter = new RemoteNativeRecoveryAdapterImpl(client, properties);
         var context = new TrustedRecoveryContext(binding, "link", "identity", "lock", Instant.now().plusSeconds(30), RecoveryAction.COMPLETE_VERIFICATION);
         var reference = new RecoveryChallengeReference(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), binding,
                 RecoveryFactorCategory.POSSESSION, properties.getProviderId(), "enrollment", "independent-origin", "ceremony", Instant.now().plusSeconds(30));
@@ -178,8 +178,8 @@ class NativeOwnerRpcClientTest {
     void explicitRemoteAndDatabaseModesWireExactlyOneConcretePortForEachCapability() {
         new org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner()
                 .withUserConfiguration(RecoveryConfiguration.class, NativeOwnerConfiguration.class,
-                        DatabaseRecoveryAuditSink.class, DatabaseRecoveryRejectionAuditAdapter.class,
-                        io.fireflysoftware.core.sca.web.recovery.DatabaseRecoveryBoundaryAuditAdapter.class)
+                        DatabaseRecoveryAuditSinkImpl.class, DatabaseRecoveryRejectionAuditAdapterImpl.class,
+                        io.fireflysoftware.core.sca.web.recovery.DatabaseRecoveryBoundaryAuditAdapterImpl.class)
                 .withBean(io.r2dbc.spi.ConnectionFactory.class, () -> mock(io.r2dbc.spi.ConnectionFactory.class))
                 .withBean(io.fireflysoftware.core.sca.models.repositories.SCARecoveryOperationRepository.class,
                         () -> mock(io.fireflysoftware.core.sca.models.repositories.SCARecoveryOperationRepository.class))
@@ -197,12 +197,12 @@ class NativeOwnerRpcClientTest {
                             .hasSingleBean(RecoveryAdmissionPort.class).hasSingleBean(RecoveryFactorProvider.class)
                             .hasSingleBean(RecoveryExecutionVerifier.class).hasSingleBean(RecoveryRejectionAuditPort.class)
                             .hasSingleBean(io.fireflysoftware.core.sca.web.recovery.RecoveryBoundaryAuditPort.class);
-                    assertInstanceOf(RemoteNativeRecoveryAdapter.class, context.getBean(RecoveryAdmissionPort.class));
+                    assertInstanceOf(RemoteNativeRecoveryAdapterImpl.class, context.getBean(RecoveryAdmissionPort.class));
                 });
         assertEquals(0, requests.get());
     }
 
-    private Mono<String> request(NativeOwnerRpcClient selected) {
+    private Mono<String> request(NativeOwnerRpcClientImpl selected) {
         return selected.call("admit", new NativeOwnerRpc(null, binding, null, null, null, null, null, null, null, null, RecoveryAction.CREATE), String.class);
     }
     private void assertUnavailable() {
@@ -210,13 +210,13 @@ class NativeOwnerRpcClientTest {
                 .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication)).block(Duration.ofSeconds(5)));
         assertNull(error.getCause()); assertFalse(error.toString().contains("synthetic-"));
     }
-    private static NativeOwnerRpcClient trustedClient(NativeOwnerProperties settings) throws Exception {
+    private static NativeOwnerRpcClientImpl trustedClient(NativeOwnerProperties settings) throws Exception {
         var tls = SslContextBuilder.forClient().trustManager(temporary.resolve("certificate.pem").toFile()).build();
         var connector = new ReactorClientHttpConnector(HttpClient.create().followRedirect(false).responseTimeout(settings.getTimeout())
                 .secure(ssl -> ssl.sslContext(tls).handlerConfigurator(handler -> {
                     var parameters = handler.engine().getSSLParameters(); parameters.setEndpointIdentificationAlgorithm("HTTPS"); handler.engine().setSSLParameters(parameters);
                 })));
-        return new NativeOwnerRpcClient(settings, issuer, "core-recovery", WebClient.builder().clientConnector(connector));
+        return new NativeOwnerRpcClientImpl(settings, issuer, "core-recovery", WebClient.builder().clientConnector(connector));
     }
     private String bindingJson() {
         return "{\"issuer\":\"" + issuer + "\",\"tenant\":\"tenant\",\"clientId\":\"recovery-client\",\"delegatingClientId\":null,\"actorSubject\":\"subject\",\"targetIssuer\":\"" + issuer

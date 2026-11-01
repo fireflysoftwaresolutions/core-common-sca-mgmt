@@ -16,7 +16,7 @@
 
 package io.fireflysoftware.core.sca.web.recovery;
 
-import io.fireflysoftware.core.sca.core.recovery.DatabaseRecoveryAuditSink;
+import io.fireflysoftware.core.sca.core.recovery.DatabaseRecoveryAuditSinkImpl;
 import io.fireflysoftware.core.sca.core.recovery.RecoveryAuditActor;
 import io.fireflysoftware.core.sca.core.recovery.RecoveryRejectionAuditReceipt;
 import io.fireflysoftware.core.sca.interfaces.recovery.RecoveryAction;
@@ -30,8 +30,8 @@ import static org.mockito.Mockito.*;
 class DatabaseRecoveryBoundaryAuditAdapterTest {
     @Test
     void verifiedAndAnonymousBoundaryEventsUseTheCommittedOwningSink() {
-        var sink = mock(DatabaseRecoveryAuditSink.class);
-        var adapter = new DatabaseRecoveryBoundaryAuditAdapter(sink);
+        var sink = mock(DatabaseRecoveryAuditSinkImpl.class);
+        var adapter = new DatabaseRecoveryBoundaryAuditAdapterImpl(sink);
         var actor = new RecoveryBoundaryAuditPort.VerifiedActor("issuer", "tenant", "actor", "client", "HUMAN");
         var expected = new RecoveryAuditActor("issuer", "tenant", "actor", "client", "HUMAN");
         when(sink.record(expected, RecoveryAction.RESERVE_VERIFICATION, "ADMITTED"))

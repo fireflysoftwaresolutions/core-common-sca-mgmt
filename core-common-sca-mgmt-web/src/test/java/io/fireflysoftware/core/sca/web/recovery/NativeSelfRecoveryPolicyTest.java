@@ -28,7 +28,7 @@ class NativeSelfRecoveryPolicyTest {
     private final Instant now = Instant.parse("2026-10-31T23:00:00Z");
     private final String issuer = "https://id.example/realms/customer";
     private final List<String> audiences = List.of("firefly-recovery-core", "firefly-recovery-domain");
-    private final NativeSelfRecoveryPolicy policy = new NativeSelfRecoveryPolicy(issuer, "customer", List.of("recovery-client"),
+    private final NativeSelfRecoveryPolicyImpl policy = new NativeSelfRecoveryPolicyImpl(issuer, "customer", List.of("recovery-client"),
             List.of("HUMAN"), audiences, Clock.fixed(now, ZoneOffset.UTC));
     private Map<String, Object> claims() {
         var values = new HashMap<String, Object>();

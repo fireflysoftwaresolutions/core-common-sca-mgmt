@@ -16,17 +16,17 @@
 
 package io.fireflysoftware.core.sca.web.recovery;
 
-import io.fireflysoftware.core.sca.core.recovery.DatabaseRecoveryAuditSink;
+import io.fireflysoftware.core.sca.core.recovery.DatabaseRecoveryAuditSinkImpl;
 import io.fireflysoftware.core.sca.core.recovery.RecoveryAuditActor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
-@Component
+@Component("databaseRecoveryBoundaryAuditAdapter")
 @ConditionalOnProperty(name = {"firefly.sca.recovery.enabled", "firefly.sca.recovery.database-audit.enabled"}, havingValue = "true")
-public final class DatabaseRecoveryBoundaryAuditAdapter implements RecoveryBoundaryAuditPort {
-    private final DatabaseRecoveryAuditSink sink;
-    public DatabaseRecoveryBoundaryAuditAdapter(DatabaseRecoveryAuditSink sink) { this.sink = sink; }
+public final class DatabaseRecoveryBoundaryAuditAdapterImpl implements RecoveryBoundaryAuditPort {
+    private final DatabaseRecoveryAuditSinkImpl sink;
+    public DatabaseRecoveryBoundaryAuditAdapterImpl(DatabaseRecoveryAuditSinkImpl sink) { this.sink = sink; }
     @Override public boolean isQualified() { return true; }
     @Override public Mono<Void> record(Event event) {
         var actor = event.actor();

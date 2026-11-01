@@ -34,10 +34,10 @@ import java.util.Set;
 import java.util.UUID;
 
 /** Narrow product self-recovery policy; native current-state admission remains independently mandatory. */
-@Component
+@Component("nativeSelfRecoveryPolicy")
 @ConditionalOnProperty(name = {"firefly.sca.recovery.enabled", "firefly.sca.recovery.native-owner.enabled",
         "firefly.sca.recovery.native-self-policy.enabled"}, havingValue = "true")
-public final class NativeSelfRecoveryPolicy implements PolicyDecisionPort {
+public final class NativeSelfRecoveryPolicyImpl implements PolicyDecisionPort {
     private static final String PURPOSE = "PERMANENT_AUTHENTICATION_UNLOCK";
     private static final Set<String> ACTIONS = Set.of("sca.recovery.create", "sca.recovery.challenge.issue",
             "sca.recovery.challenge.verify", "sca.recovery.verification.reserve", "sca.recovery.verification.complete",
@@ -50,14 +50,14 @@ public final class NativeSelfRecoveryPolicy implements PolicyDecisionPort {
     private final Clock clock;
 
     @Autowired
-    public NativeSelfRecoveryPolicy(@Value("${firefly.sca.recovery.receiver.issuer}") String issuer,
+    public NativeSelfRecoveryPolicyImpl(@Value("${firefly.sca.recovery.receiver.issuer}") String issuer,
             @Value("${firefly.sca.recovery.native-self-policy.realm}") String realm,
             @Value("${firefly.sca.recovery.receiver.allowed-clients}") List<String> clients,
             @Value("${firefly.sca.recovery.receiver.allowed-populations}") List<String> populations,
             @Value("${firefly.sca.recovery.native-self-policy.actor-audiences}") List<String> audiences) {
         this(issuer, realm, clients, populations, audiences, Clock.systemUTC());
     }
-    NativeSelfRecoveryPolicy(String issuer, String realm, List<String> clients, List<String> populations,
+    NativeSelfRecoveryPolicyImpl(String issuer, String realm, List<String> clients, List<String> populations,
             List<String> audiences, Clock clock) {
         if (issuer == null || !issuer.startsWith("https://") || realm == null || realm.isBlank()
                 || !issuer.endsWith("/realms/" + realm) || clients == null || clients.isEmpty()

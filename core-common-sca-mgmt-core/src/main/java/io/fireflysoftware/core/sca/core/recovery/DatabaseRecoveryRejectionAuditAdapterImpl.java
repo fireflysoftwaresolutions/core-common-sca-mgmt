@@ -21,11 +21,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
-@Component
+@Component("databaseRecoveryRejectionAuditAdapter")
 @ConditionalOnProperty(name = {"firefly.sca.recovery.enabled", "firefly.sca.recovery.database-audit.enabled"}, havingValue = "true")
-public final class DatabaseRecoveryRejectionAuditAdapter implements RecoveryRejectionAuditPort {
-    private final DatabaseRecoveryAuditSink sink;
-    public DatabaseRecoveryRejectionAuditAdapter(DatabaseRecoveryAuditSink sink) { this.sink = sink; }
+public final class DatabaseRecoveryRejectionAuditAdapterImpl implements RecoveryRejectionAuditPort {
+    private final DatabaseRecoveryAuditSinkImpl sink;
+    public DatabaseRecoveryRejectionAuditAdapterImpl(DatabaseRecoveryAuditSinkImpl sink) { this.sink = sink; }
     @Override public boolean isQualified() { return true; }
     @Override public Mono<RecoveryRejectionAuditReceipt> recordRejection(TrustedRecoveryContext context, RecoveryAction action) {
         var binding = context.binding();

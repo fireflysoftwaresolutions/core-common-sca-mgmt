@@ -54,7 +54,7 @@ class RecoverySecurityConfigurationTest {
                 .withPropertyValues("firefly.sca.recovery.enabled=false", "firefly.security.resource-server.enabled=false")
                 .run(context -> {
                     assertThat(context).hasNotFailed().hasSingleBean(SCARecoveryController.class)
-                            .doesNotHaveBean(SCARecoveryService.class).doesNotHaveBean(RecoveryWebAuthorization.class)
+                            .doesNotHaveBean(SCARecoveryService.class).doesNotHaveBean(RecoveryWebAuthorizationImpl.class)
                             .doesNotHaveBean(ReactiveJwtDecoder.class);
                 });
     }
@@ -186,7 +186,7 @@ class RecoverySecurityConfigurationTest {
     static class OffControllerConfiguration {
         @Bean
         SCARecoveryController recoveryController(ObjectProvider<SCARecoveryService> services,
-                ObjectProvider<RecoveryWebAuthorization> authorizations, RecoveryProperties properties, ObjectProvider<RecoveryBoundaryAuditPort> audits) {
+                ObjectProvider<RecoveryWebAuthorizationImpl> authorizations, RecoveryProperties properties, ObjectProvider<RecoveryBoundaryAuditPort> audits) {
             return new SCARecoveryController(services, authorizations, properties, audits);
         }
     }

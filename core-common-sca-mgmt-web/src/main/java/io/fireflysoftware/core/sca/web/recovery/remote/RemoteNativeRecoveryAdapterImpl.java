@@ -23,10 +23,10 @@ import java.time.Instant;
 import java.util.UUID;
 
 /** Actual native-owner RPC ports. Qualification is explicit configuration, never a success stub. */
-public final class RemoteNativeRecoveryAdapter implements RecoveryAdmissionPort, RecoveryFactorProvider, RecoveryExecutionVerifier {
-    private final NativeOwnerRpcClient client;
+public final class RemoteNativeRecoveryAdapterImpl implements RecoveryAdmissionPort, RecoveryFactorProvider, RecoveryExecutionVerifier {
+    private final NativeOwnerRpcClientImpl client;
     private final String providerId;
-    public RemoteNativeRecoveryAdapter(NativeOwnerRpcClient client, NativeOwnerProperties properties) {
+    public RemoteNativeRecoveryAdapterImpl(NativeOwnerRpcClientImpl client, NativeOwnerProperties properties) {
         this.client = client;
         providerId = properties.getProviderId();
     }
