@@ -34,6 +34,11 @@ server:
   shutdown: graceful
 
   address: ${SERVER_ADDRESS:localhost}
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+    include-exception: false
 springdoc:
   api-docs:
     enabled: true
@@ -54,7 +59,8 @@ management:
         include: health,info,prometheus
   endpoint:
     health:
-      show-details: always
+      show-details: never
+      show-components: never
       probes:
         enabled: true
   health:
@@ -63,7 +69,20 @@ management:
     readinessState:
       enabled: true
 
+firefly:
+  security:
+    resource-server:
+      enabled: false
+  sca:
+    recovery:
+      enabled: ${SCA_RECOVERY_ENABLED:false}
+
 logging:
+  level:
+    root: INFO
+    io.fireflysoftware: INFO
+    org.springframework.web: INFO
+    org.springframework.r2dbc: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 
@@ -76,9 +95,9 @@ spring:
 logging:
   level:
     root: INFO
-    io.fireflysoftware: DEBUG
-    org.springframework.r2dbc: DEBUG
-    org.flywaydb: DEBUG
+    io.fireflysoftware: INFO
+    org.springframework.r2dbc: INFO
+    org.flywaydb: INFO
 
 ---
 spring:
@@ -89,7 +108,7 @@ spring:
 logging:
   level:
     root: INFO
-    io.fireflysoftware: DEBUG
+    io.fireflysoftware: INFO
     org.springframework.r2dbc: INFO
 
 springdoc:
@@ -115,3 +134,34 @@ springdoc:
     enabled: false
   swagger-ui:
     enabled: false
+
+
+---
+spring:
+  config:
+    activate:
+      on-profile: sca-recovery-receiver
+
+# This profile does not supply qualified native/owner/factor/executor capabilities.
+# Enabling without them fails closed in the independent core recovery configuration.
+firefly:
+  security:
+    resource-server:
+      enabled: ${SCA_RECOVERY_ENABLED:false}
+      issuer: ${SCA_RECOVERY_TRUSTED_ISSUER}
+      jwk-set-uri: ${SCA_RECOVERY_TRUSTED_JWKS_URI}
+      audiences:
+        - ${SCA_RECOVERY_AUDIENCE}
+      tenant-claim-paths: [tenant_id]
+      tenant-required: true
+      strict-policy: true
+      signature-algorithms: [RS256]
+  sca:
+    recovery:
+      database-audit:
+        enabled: ${SCA_RECOVERY_DATABASE_AUDIT_ENABLED:false}
+      receiver:
+        issuer: ${SCA_RECOVERY_TRUSTED_ISSUER}
+        audience: ${SCA_RECOVERY_AUDIENCE}
+        allowed-clients: ${SCA_RECOVERY_ALLOWED_CLIENTS}
+        allowed-populations: ${SCA_RECOVERY_ALLOWED_POPULATIONS}
